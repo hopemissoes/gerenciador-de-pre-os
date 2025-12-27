@@ -19,13 +19,10 @@ class Gerenciador_Precos_Planos {
     public function __construct() {
         // Adiciona menu no admin
         add_action('admin_menu', array($this, 'adicionar_menu_admin'));
-        
-        // Registra shortcode dinâmico
-        add_action('init', array($this, 'registrar_shortcodes'));
-        
-        // Registra shortcodes de variáveis dinâmicas
-        add_action('init', array($this, 'registrar_shortcodes_variaveis'));
-        
+
+        // Registra shortcode dinâmico (COM PROTEÇÃO para não registrar em requisições Elementor)
+        add_action('init', array($this, 'registrar_shortcodes_com_protecao'), 999);
+
         // ===== NOVA FUNCIONALIDADE: Registra variáveis no RankMath =====
         add_action('rank_math/vars/register', array($this, 'registrar_variaveis_rankmath'));
         
@@ -92,6 +89,61 @@ class Gerenciador_Precos_Planos {
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
     }
     
+    /**
+     * Registra shortcodes apenas quando necessário (não em requisições Elementor)
+     */
+    public function registrar_shortcodes_com_protecao() {
+        // NÃO registra shortcodes em contextos problemáticos
+        if ($this->should_skip_shortcode_registration()) {
+            return;
+        }
+
+        // Registra shortcodes normalmente
+        $this->registrar_shortcodes();
+        $this->registrar_shortcodes_variaveis();
+    }
+
+    /**
+     * Verifica se deve pular o registro de shortcodes
+     */
+    private function should_skip_shortcode_registration() {
+        // Pula em requisições AJAX do Elementor
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            if (isset($_REQUEST['action'])) {
+                $action = $_REQUEST['action'];
+                // Lista de actions do Elementor que não precisam dos shortcodes
+                $elementor_actions = array(
+                    'elementor_ajax',
+                    'elementor_render_widget',
+                    'elementor_editor_data',
+                    'elementor_get_document_config',
+                    'elementor_save_builder',
+                );
+
+                foreach ($elementor_actions as $el_action) {
+                    if (strpos($action, $el_action) !== false || strpos($action, 'elementor') === 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Pula no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return true;
+        }
+
+        // Pula no admin (exceto no próprio admin do plugin)
+        if (is_admin()) {
+            $page = isset($_GET['page']) ? $_GET['page'] : '';
+            if ($page !== 'gerenciador-precos-planos') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Verifica se estamos no contexto do Elementor que não deve processar shortcodes
      */
