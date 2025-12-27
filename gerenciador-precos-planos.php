@@ -123,13 +123,18 @@ class Gerenciador_Precos_Planos {
             error_log('GPP: Limite de memória atual: ' . $current_limit);
         }
 
-        // Registra shortcodes normalmente
+        // Registra apenas shortcodes de tabela (não variáveis individuais)
         $this->registrar_shortcodes();
-        $this->registrar_shortcodes_variaveis();
+
+        // DESABILITADO TEMPORARIAMENTE: Causa excesso de shortcodes (350+)
+        // $this->registrar_shortcodes_variaveis();
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('GPP: Shortcodes registrados. Memória usada: ' . size_format(memory_get_usage(true)));
+            $cidades = $this->obter_todas_cidades();
+            error_log('GPP: Shortcodes de TABELA registrados para ' . count($cidades) . ' cidades');
+            error_log('GPP: Shortcodes de VARIÁVEIS desabilitados (otimização)');
+            error_log('GPP: Memória usada: ' . size_format(memory_get_usage(true)));
         }
     }
 
