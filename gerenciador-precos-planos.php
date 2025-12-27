@@ -137,30 +137,61 @@ class Gerenciador_Precos_Planos {
      * Verifica se deve pular o registro de shortcodes
      */
     private function should_skip_shortcode_registration() {
+        // DEBUG: Log completo do contexto
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $url = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'unknown';
+            $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : 'none';
+
+            error_log('GPP DEBUG: Verificando contexto');
+            error_log('  - URL: ' . $url);
+            error_log('  - is_admin(): ' . (is_admin() ? 'TRUE' : 'false'));
+            error_log('  - DOING_AJAX: ' . (defined('DOING_AJAX') && DOING_AJAX ? 'TRUE' : 'false'));
+            error_log('  - Referer: ' . $referer);
+        }
+
         // PROTEÇÃO AGRESSIVA: Pula no admin completamente (inclusive no próprio plugin)
         // Shortcodes não são necessários no admin
         if (is_admin()) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - is_admin() = true');
+            }
             return true;
         }
 
         // Pula em QUALQUER requisição AJAX
         if (defined('DOING_AJAX') && DOING_AJAX) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - DOING_AJAX = true');
+            }
             return true;
         }
 
         // Pula no editor do Elementor
         if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library']) || isset($_GET['elementor-preview-mode'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - Elementor GET param');
+            }
             return true;
         }
 
         // Pula se detectar Elementor no User-Agent ou Referer
         if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'elementor') !== false) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - Elementor no referer');
+            }
             return true;
         }
 
         // Pula em requisições REST API
         if (defined('REST_REQUEST') && REST_REQUEST) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - REST_REQUEST');
+            }
             return true;
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: ✗ NÃO PULOU - Vai registrar filtros/shortcodes');
         }
 
         return false;
