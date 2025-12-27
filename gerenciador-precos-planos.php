@@ -98,47 +98,50 @@ class Gerenciador_Precos_Planos {
             return;
         }
 
+        // DEBUG: Aumenta limite de memória se necessário
+        $current_limit = ini_get('memory_limit');
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: Limite de memória atual: ' . $current_limit);
+        }
+
         // Registra shortcodes normalmente
         $this->registrar_shortcodes();
         $this->registrar_shortcodes_variaveis();
+
+        // DEBUG: Log após registro
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: Shortcodes registrados. Memória usada: ' . size_format(memory_get_usage(true)));
+        }
     }
 
     /**
      * Verifica se deve pular o registro de shortcodes
      */
     private function should_skip_shortcode_registration() {
-        // Pula em requisições AJAX do Elementor
-        if (defined('DOING_AJAX') && DOING_AJAX) {
-            if (isset($_REQUEST['action'])) {
-                $action = $_REQUEST['action'];
-                // Lista de actions do Elementor que não precisam dos shortcodes
-                $elementor_actions = array(
-                    'elementor_ajax',
-                    'elementor_render_widget',
-                    'elementor_editor_data',
-                    'elementor_get_document_config',
-                    'elementor_save_builder',
-                );
-
-                foreach ($elementor_actions as $el_action) {
-                    if (strpos($action, $el_action) !== false || strpos($action, 'elementor') === 0) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        // Pula no editor do Elementor
-        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+        // PROTEÇÃO AGRESSIVA: Pula no admin completamente (inclusive no próprio plugin)
+        // Shortcodes não são necessários no admin
+        if (is_admin()) {
             return true;
         }
 
-        // Pula no admin (exceto no próprio admin do plugin)
-        if (is_admin()) {
-            $page = isset($_GET['page']) ? $_GET['page'] : '';
-            if ($page !== 'gerenciador-precos-planos') {
-                return true;
-            }
+        // Pula em QUALQUER requisição AJAX
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return true;
+        }
+
+        // Pula no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library']) || isset($_GET['elementor-preview-mode'])) {
+            return true;
+        }
+
+        // Pula se detectar Elementor no User-Agent ou Referer
+        if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'elementor') !== false) {
+            return true;
+        }
+
+        // Pula em requisições REST API
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            return true;
         }
 
         return false;
