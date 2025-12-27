@@ -123,17 +123,15 @@ class Gerenciador_Precos_Planos {
             error_log('GPP: Limite de memória atual: ' . $current_limit);
         }
 
-        // Registra apenas shortcodes de tabela (não variáveis individuais)
+        // Registra shortcodes de tabela E variáveis (limitadas a 2 primeiras faixas)
         $this->registrar_shortcodes();
-
-        // DESABILITADO TEMPORARIAMENTE: Causa excesso de shortcodes (350+)
-        // $this->registrar_shortcodes_variaveis();
+        $this->registrar_shortcodes_variaveis();
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
             $cidades = $this->obter_todas_cidades();
-            error_log('GPP: Shortcodes de TABELA registrados para ' . count($cidades) . ' cidades');
-            error_log('GPP: Shortcodes de VARIÁVEIS desabilitados (otimização)');
+            error_log('GPP: Shortcodes registrados para ' . count($cidades) . ' cidades');
+            error_log('GPP: Variáveis limitadas a 2 primeiras faixas (0 e 1) - otimização');
             error_log('GPP: Memória usada: ' . size_format(memory_get_usage(true)));
         }
     }
@@ -1055,8 +1053,14 @@ public function pagina_variaveis() {
                         // Total
                         $campo_total = $tipo_key_local . '_' . $acom_local . '_total';
                         if (!empty($cidade_local[$campo_total])) {
-                            // Shortcodes para cada faixa etária
+                            // OTIMIZAÇÃO: Registra apenas as 2 primeiras faixas (0 e 1)
+                            // Evita sobrecarga com 10 faixas × múltiplas cidades
                             foreach ($cidade_local[$campo_total] as $index => $plano) {
+                                // Pula faixas >= 2 para evitar sobrecarga
+                                if ($index >= 2) {
+                                    continue;
+                                }
+
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'total_' . $index;
 
                                 // Cria variáveis locais para a closure
@@ -1082,8 +1086,14 @@ public function pagina_variaveis() {
                         // Parcial
                         $campo_parcial = $tipo_key_local . '_' . $acom_local . '_parcial';
                         if (!empty($cidade_local[$campo_parcial])) {
-                            // Shortcodes para cada faixa etária
+                            // OTIMIZAÇÃO: Registra apenas as 2 primeiras faixas (0 e 1)
+                            // Evita sobrecarga com 10 faixas × múltiplas cidades
                             foreach ($cidade_local[$campo_parcial] as $index => $plano) {
+                                // Pula faixas >= 2 para evitar sobrecarga
+                                if ($index >= 2) {
+                                    continue;
+                                }
+
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'parcial_' . $index;
 
                                 // Cria variáveis locais para a closure
