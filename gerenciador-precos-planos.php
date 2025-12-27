@@ -38,8 +38,27 @@ class Gerenciador_Precos_Planos {
         
         // Adiciona submenu de variáveis
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
-        
+
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
+        // IMPORTANTE: Só adiciona filtros se NÃO estiver em contexto problemático
+        add_action('init', array($this, 'registrar_filtros_shortcode'), 5);
+    }
+
+    /**
+     * Registra filtros de shortcode apenas em contextos seguros
+     */
+    public function registrar_filtros_shortcode() {
+        // NÃO adiciona filtros em contextos problemáticos
+        if ($this->should_skip_shortcode_registration()) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: Pulando registro de FILTROS (contexto não seguro)');
+            }
+            return;
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: Registrando filtros de shortcode');
+        }
 
         // Processa shortcodes em títulos de posts/páginas (com proteção para Elementor)
         add_filter('the_title', array($this, 'processar_shortcode_title_seguro'), 11, 2);
@@ -49,7 +68,7 @@ class Gerenciador_Precos_Planos {
 
         // Processa shortcodes em widgets de título
         add_filter('widget_title', 'do_shortcode', 11);
-        
+
         // === YOAST SEO ===
         add_filter('wpseo_title', 'do_shortcode', 11);
         add_filter('wpseo_metadesc', 'do_shortcode', 11);
@@ -57,7 +76,7 @@ class Gerenciador_Precos_Planos {
         add_filter('wpseo_opengraph_desc', 'do_shortcode', 11);
         add_filter('wpseo_twitter_title', 'do_shortcode', 11);
         add_filter('wpseo_twitter_description', 'do_shortcode', 11);
-        
+
         // === RANK MATH SEO ===
         add_filter('rank_math/frontend/title', 'do_shortcode', 11);
         add_filter('rank_math/frontend/description', 'do_shortcode', 11);
@@ -65,12 +84,12 @@ class Gerenciador_Precos_Planos {
         add_filter('rank_math/opengraph/facebook/description', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/title', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/description', 'do_shortcode', 11);
-        
+
         // === ALL IN ONE SEO ===
         add_filter('aioseop_title', 'do_shortcode', 11);
         add_filter('aioseop_description', 'do_shortcode', 11);
         add_filter('aioseop_title_page', 'do_shortcode', 11);
-        
+
         // === SEOPress ===
         add_filter('seopress_titles_title', 'do_shortcode', 11);
         add_filter('seopress_titles_desc', 'do_shortcode', 11);
@@ -78,17 +97,17 @@ class Gerenciador_Precos_Planos {
         add_filter('seopress_social_og_desc', 'do_shortcode', 11);
         add_filter('seopress_social_twitter_title', 'do_shortcode', 11);
         add_filter('seopress_social_twitter_desc', 'do_shortcode', 11);
-        
+
         // === The SEO Framework ===
         add_filter('the_seo_framework_title_from_custom_field', 'do_shortcode', 11);
         add_filter('the_seo_framework_description_from_custom_field', 'do_shortcode', 11);
         add_filter('the_seo_framework_generated_description', 'do_shortcode', 11);
-        
+
         // Processa shortcodes em custom fields (ACF e outros)
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
     }
-    
+
     /**
      * Registra shortcodes apenas quando necessário (não em requisições Elementor)
      */
