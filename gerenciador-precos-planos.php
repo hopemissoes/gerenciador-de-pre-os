@@ -775,7 +775,10 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_total] as $idx => $plano): 
+                                                <?php foreach ($cidade[$campo_total] as $idx => $plano):
+                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0 e 1 (as que estão registradas)
+                                                    if ($idx >= 2) continue;
+
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'total_' . $idx;
                                                 ?>
                                                     <tr>
@@ -806,7 +809,10 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_parcial] as $idx => $plano): 
+                                                <?php foreach ($cidade[$campo_parcial] as $idx => $plano):
+                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0 e 1 (as que estão registradas)
+                                                    if ($idx >= 2) continue;
+
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'parcial_' . $idx;
                                                 ?>
                                                     <tr>
