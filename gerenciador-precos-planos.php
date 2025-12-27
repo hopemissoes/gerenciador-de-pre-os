@@ -43,13 +43,13 @@ class Gerenciador_Precos_Planos {
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
         
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
-        
-        // Processa shortcodes em títulos de posts/páginas
-        add_filter('the_title', 'do_shortcode', 11);
-        add_filter('single_post_title', 'do_shortcode', 11);
-        add_filter('wp_title', 'do_shortcode', 11);
+
+        // Processa shortcodes em títulos de posts/páginas (com proteção para Elementor)
+        add_filter('the_title', array($this, 'processar_shortcode_title_seguro'), 11, 2);
+        add_filter('single_post_title', array($this, 'processar_shortcode_title_unico'), 11);
+        add_filter('wp_title', array($this, 'processar_shortcode_wp_title'), 11);
         add_filter('document_title_parts', array($this, 'processar_shortcode_title_parts'), 11);
-        
+
         // Processa shortcodes em widgets de título
         add_filter('widget_title', 'do_shortcode', 11);
         
@@ -93,16 +93,96 @@ class Gerenciador_Precos_Planos {
     }
     
     /**
+     * Verifica se estamos no contexto do Elementor que não deve processar shortcodes
+     */
+    private function is_elementor_context() {
+        // Não processa no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return true;
+        }
+
+        // Não processa em requisições AJAX do Elementor
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            if (isset($_REQUEST['action']) && strpos($_REQUEST['action'], 'elementor') !== false) {
+                return true;
+            }
+        }
+
+        // Não processa no admin (exceto frontend)
+        if (is_admin() && !wp_doing_ajax()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Processa shortcodes em títulos de forma segura (com proteção Elementor)
+     */
+    public function processar_shortcode_title_seguro($title, $id = null) {
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        // Não processa títulos vazios
+        if (empty($title) || !is_string($title)) {
+            return $title;
+        }
+
+        // Só processa se realmente houver shortcodes no título
+        if (strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
+    }
+
+    /**
+     * Processa shortcodes em título único
+     */
+    public function processar_shortcode_title_unico($title) {
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        if (empty($title) || !is_string($title) || strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
+    }
+
+    /**
+     * Processa shortcodes em wp_title
+     */
+    public function processar_shortcode_wp_title($title) {
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        if (empty($title) || !is_string($title) || strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
+    }
+
+    /**
      * Processa shortcodes nas partes do título do documento
      */
     public function processar_shortcode_title_parts($title_parts) {
-        if (isset($title_parts['title'])) {
+        if ($this->is_elementor_context()) {
+            return $title_parts;
+        }
+
+        if (isset($title_parts['title']) && is_string($title_parts['title'])) {
             $title_parts['title'] = do_shortcode($title_parts['title']);
         }
-        if (isset($title_parts['tagline'])) {
+        if (isset($title_parts['tagline']) && is_string($title_parts['tagline'])) {
             $title_parts['tagline'] = do_shortcode($title_parts['tagline']);
         }
-        if (isset($title_parts['site'])) {
+        if (isset($title_parts['site']) && is_string($title_parts['site'])) {
             $title_parts['site'] = do_shortcode($title_parts['site']);
         }
         return $title_parts;
@@ -112,7 +192,13 @@ class Gerenciador_Precos_Planos {
      * Processa shortcodes em campos ACF
      */
     public function processar_shortcode_acf($value, $post_id, $field) {
-        if (is_string($value)) {
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $value;
+        }
+
+        // Só processa strings que contenham shortcodes
+        if (is_string($value) && strpos($value, '[') !== false) {
             return do_shortcode($value);
         }
         return $value;
@@ -124,11 +210,21 @@ class Gerenciador_Precos_Planos {
     public function processar_shortcode_meta($value, $object_id, $meta_key, $single) {
         // Evita recursão infinita
         static $processing = false;
-        
+
         if ($processing) {
             return $value;
         }
-        
+
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $value;
+        }
+
+        // IMPORTANTE: Ignora metadados do Elementor para evitar conflitos
+        if (strpos($meta_key, '_elementor') === 0 || strpos($meta_key, 'elementor') !== false) {
+            return $value;
+        }
+
         // Lista de meta keys comuns de SEO que devem ter shortcodes processados
         $seo_meta_keys = array(
             '_yoast_wpseo_title',
@@ -140,23 +236,24 @@ class Gerenciador_Precos_Planos {
             '_seopress_titles_title',
             '_seopress_titles_desc',
         );
-        
+
         if (in_array($meta_key, $seo_meta_keys)) {
             $processing = true;
-            
+
             // Obtém o valor real do meta
             remove_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11);
             $real_value = get_metadata('post', $object_id, $meta_key, $single);
             add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
-            
-            if (is_string($real_value) && !empty($real_value)) {
+
+            // Só processa se for string e tiver shortcodes
+            if (is_string($real_value) && !empty($real_value) && strpos($real_value, '[') !== false) {
                 $real_value = do_shortcode($real_value);
             }
-            
+
             $processing = false;
             return $real_value;
         }
-        
+
         return $value;
     }
     
