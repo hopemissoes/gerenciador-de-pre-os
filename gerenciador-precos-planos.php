@@ -807,11 +807,14 @@ public function pagina_variaveis() {
      */
     public function registrar_shortcodes_variaveis() {
         $cidades = $this->obter_todas_cidades();
-        
+        $plugin_instance = $this;
+
         if (!empty($cidades)) {
             foreach ($cidades as $cidade_data) {
-                $shortcode_base = $cidade_data['shortcode'];
-                
+                // Cria cópia local para evitar problemas de referência em closures
+                $cidade_local = $cidade_data;
+                $shortcode_base = $cidade_local['shortcode'];
+
                 // Define os tipos de planos
                 $tipos_plano = array(
                     'empresarial' => 'emp',
@@ -819,66 +822,78 @@ public function pagina_variaveis() {
                     'pme' => 'pme',
                     'adesao' => 'ade'
                 );
-                
+
                 // Define as acomodações
                 $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
-                
+
                 foreach ($tipos_plano as $tipo_key => $tipo_sigla) {
                     // Verifica se este tipo de plano está ativo
-                    if (!isset($cidade_data['tipos_planos_ativos'][$tipo_key]) || !$cidade_data['tipos_planos_ativos'][$tipo_key]) {
+                    if (!isset($cidade_local['tipos_planos_ativos'][$tipo_key]) || !$cidade_local['tipos_planos_ativos'][$tipo_key]) {
                         continue;
                     }
-                    
+
+                    // Cria variáveis locais para este tipo
+                    $tipo_key_local = $tipo_key;
+                    $tipo_sigla_local = $tipo_sigla;
+
                     foreach ($acomodacoes as $acom) {
                         // Verifica se esta acomodação está ativa
-                        $campo_ativo_acom = $tipo_key . '_' . $acom . '_ativo';
-                        if (!isset($cidade_data[$campo_ativo_acom]) || !$cidade_data[$campo_ativo_acom]) {
+                        $campo_ativo_acom = $tipo_key_local . '_' . $acom . '_ativo';
+                        if (!isset($cidade_local[$campo_ativo_acom]) || !$cidade_local[$campo_ativo_acom]) {
                             continue;
                         }
-                        
-                        // Total
-                        $campo_total = $tipo_key . '_' . $acom . '_total';
-                        if (!empty($cidade_data[$campo_total])) {
-                            // Shortcodes para cada faixa etária
-                            foreach ($cidade_data[$campo_total] as $index => $plano) {
-                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
 
-                                $plugin_instance = $this;
-                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_data, $plano, $tipo_key) {
-                                    return $plugin_instance->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+                        $acom_local = $acom;
+
+                        // Total
+                        $campo_total = $tipo_key_local . '_' . $acom_local . '_total';
+                        if (!empty($cidade_local[$campo_total])) {
+                            // Shortcodes para cada faixa etária
+                            foreach ($cidade_local[$campo_total] as $index => $plano) {
+                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'total_' . $index;
+
+                                // Cria variáveis locais para a closure
+                                $plano_local = $plano;
+
+                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_local, $plano_local, $tipo_key_local) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $plano_local['valor'], $tipo_key_local);
                                 });
                             }
 
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
-                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
-                            $plugin_instance = $this;
-                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_data, $campo_total, $tipo_key) {
-                                if (!empty($cidade_data[$campo_total][0]['valor'])) {
-                                    return $plugin_instance->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_total][0]['valor'], $tipo_key);
+                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'total';
+                            $campo_total_local = $campo_total;
+
+                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_local, $campo_total_local, $tipo_key_local) {
+                                if (!empty($cidade_local[$campo_total_local][0]['valor'])) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $cidade_local[$campo_total_local][0]['valor'], $tipo_key_local);
                                 }
                                 return 'N/A';
                             });
                         }
 
                         // Parcial
-                        $campo_parcial = $tipo_key . '_' . $acom . '_parcial';
-                        if (!empty($cidade_data[$campo_parcial])) {
+                        $campo_parcial = $tipo_key_local . '_' . $acom_local . '_parcial';
+                        if (!empty($cidade_local[$campo_parcial])) {
                             // Shortcodes para cada faixa etária
-                            foreach ($cidade_data[$campo_parcial] as $index => $plano) {
-                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
+                            foreach ($cidade_local[$campo_parcial] as $index => $plano) {
+                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'parcial_' . $index;
 
-                                $plugin_instance = $this;
-                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_data, $plano, $tipo_key) {
-                                    return $plugin_instance->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+                                // Cria variáveis locais para a closure
+                                $plano_local = $plano;
+
+                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_local, $plano_local, $tipo_key_local) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $plano_local['valor'], $tipo_key_local);
                                 });
                             }
 
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
-                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
-                            $plugin_instance = $this;
-                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_data, $campo_parcial, $tipo_key) {
-                                if (!empty($cidade_data[$campo_parcial][0]['valor'])) {
-                                    return $plugin_instance->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_parcial][0]['valor'], $tipo_key);
+                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'parcial';
+                            $campo_parcial_local = $campo_parcial;
+
+                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_local, $campo_parcial_local, $tipo_key_local) {
+                                if (!empty($cidade_local[$campo_parcial_local][0]['valor'])) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $cidade_local[$campo_parcial_local][0]['valor'], $tipo_key_local);
                                 }
                                 return 'N/A';
                             });
@@ -1057,90 +1072,89 @@ public function pagina_variaveis() {
  */
 public function registrar_shortcodes() {
     $cidades = $this->obter_todas_cidades();
-    
+    $plugin_instance = $this;
+
     if (!empty($cidades)) {
         foreach ($cidades as $cidade_data) {
             $shortcode_base = $cidade_data['shortcode'];
-            
+
             $tipos_plano = array('empresarial', 'individual', 'pme', 'adesao');
-            
+
             foreach ($tipos_plano as $tipo) {
                 // Verifica se este tipo está ativo
                 if (isset($cidade_data['tipos_planos_ativos'][$tipo]) && $cidade_data['tipos_planos_ativos'][$tipo]) {
-                    
+
+                    // Cria variáveis locais para evitar problemas de referência
+                    $shortcode_base_local = $shortcode_base;
+                    $tipo_local = $tipo;
+
                     // SHORTCODE COMPLETO (ambas coparticipações) - Com disclaimers
-                    $shortcode = $shortcode_base . '_' . $tipo;
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode = $shortcode_base_local . '_' . $tipo_local;
+                    add_shortcode($shortcode, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, true, 'AMBAS');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, true, 'AMBAS');
                             }
                         }
                         return '';
                     });
 
                     // SHORTCODE COMPLETO (ambas coparticipações) - Sem disclaimers
-                    $shortcode_sd = $shortcode_base . '_' . $tipo . '_sd';
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode_sd, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode_sd = $shortcode_base_local . '_' . $tipo_local . '_sd';
+                    add_shortcode($shortcode_sd, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, false, 'AMBAS');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, false, 'AMBAS');
                             }
                         }
                         return '';
                     });
 
                     // SHORTCODE APENAS TOTAL - Com disclaimers
-                    $shortcode_total = $shortcode_base . '_' . $tipo . '_total';
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode_total, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode_total = $shortcode_base_local . '_' . $tipo_local . '_total';
+                    add_shortcode($shortcode_total, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, true, 'SOMENTE_TOTAL');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, true, 'SOMENTE_TOTAL');
                             }
                         }
                         return '';
                     });
 
                     // SHORTCODE APENAS TOTAL - Sem disclaimers
-                    $shortcode_total_sd = $shortcode_base . '_' . $tipo . '_total_sd';
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode_total_sd, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode_total_sd = $shortcode_base_local . '_' . $tipo_local . '_total_sd';
+                    add_shortcode($shortcode_total_sd, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, false, 'SOMENTE_TOTAL');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, false, 'SOMENTE_TOTAL');
                             }
                         }
                         return '';
                     });
 
                     // SHORTCODE APENAS PARCIAL - Com disclaimers
-                    $shortcode_parcial = $shortcode_base . '_' . $tipo . '_parcial';
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode_parcial, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode_parcial = $shortcode_base_local . '_' . $tipo_local . '_parcial';
+                    add_shortcode($shortcode_parcial, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, true, 'SOMENTE_PARCIAL');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, true, 'SOMENTE_PARCIAL');
                             }
                         }
                         return '';
                     });
 
                     // SHORTCODE APENAS PARCIAL - Sem disclaimers
-                    $shortcode_parcial_sd = $shortcode_base . '_' . $tipo . '_parcial_sd';
-                    $plugin_instance = $this;
-                    add_shortcode($shortcode_parcial_sd, function($atts) use ($plugin_instance, $shortcode_base, $tipo) {
+                    $shortcode_parcial_sd = $shortcode_base_local . '_' . $tipo_local . '_parcial_sd';
+                    add_shortcode($shortcode_parcial_sd, function($atts) use ($plugin_instance, $shortcode_base_local, $tipo_local) {
                         $cidades = $plugin_instance->obter_todas_cidades();
                         foreach ($cidades as $c) {
-                            if ($c['shortcode'] === $shortcode_base) {
-                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo, false, 'SOMENTE_PARCIAL');
+                            if ($c['shortcode'] === $shortcode_base_local) {
+                                return $plugin_instance->renderizar_tabela_cidade($c, $tipo_local, false, 'SOMENTE_PARCIAL');
                             }
                         }
                         return '';
