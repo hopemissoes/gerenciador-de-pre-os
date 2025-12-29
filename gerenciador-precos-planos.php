@@ -131,7 +131,7 @@ class Gerenciador_Precos_Planos {
         if (defined('WP_DEBUG') && WP_DEBUG) {
             $cidades = $this->obter_todas_cidades();
             error_log('GPP: Shortcodes registrados para ' . count($cidades) . ' cidades');
-            error_log('GPP: Variáveis limitadas a 2 primeiras faixas (0 e 1) - otimização');
+            error_log('GPP: Variáveis limitadas a faixas 0, 1 e 9 (primeira, segunda e última)');
             error_log('GPP: Memória usada: ' . size_format(memory_get_usage(true)));
         }
     }
@@ -776,8 +776,8 @@ public function pagina_variaveis() {
                                             </thead>
                                             <tbody>
                                                 <?php foreach ($cidade[$campo_total] as $idx => $plano):
-                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0 e 1 (as que estão registradas)
-                                                    if ($idx >= 2) continue;
+                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0, 1 e 9 (as que estão registradas)
+                                                    if ($idx !== 0 && $idx !== 1 && $idx !== 9) continue;
 
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'total_' . $idx;
                                                 ?>
@@ -810,8 +810,8 @@ public function pagina_variaveis() {
                                             </thead>
                                             <tbody>
                                                 <?php foreach ($cidade[$campo_parcial] as $idx => $plano):
-                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0 e 1 (as que estão registradas)
-                                                    if ($idx >= 2) continue;
+                                                    // OTIMIZAÇÃO: Mostra apenas faixas 0, 1 e 9 (as que estão registradas)
+                                                    if ($idx !== 0 && $idx !== 1 && $idx !== 9) continue;
 
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'parcial_' . $idx;
                                                 ?>
@@ -1059,11 +1059,11 @@ public function pagina_variaveis() {
                         // Total
                         $campo_total = $tipo_key_local . '_' . $acom_local . '_total';
                         if (!empty($cidade_local[$campo_total])) {
-                            // OTIMIZAÇÃO: Registra apenas as 2 primeiras faixas (0 e 1)
+                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
                             // Evita sobrecarga com 10 faixas × múltiplas cidades
                             foreach ($cidade_local[$campo_total] as $index => $plano) {
-                                // Pula faixas >= 2 para evitar sobrecarga
-                                if ($index >= 2) {
+                                // Registra apenas índices 0, 1 e 9
+                                if ($index !== 0 && $index !== 1 && $index !== 9) {
                                     continue;
                                 }
 
@@ -1092,11 +1092,11 @@ public function pagina_variaveis() {
                         // Parcial
                         $campo_parcial = $tipo_key_local . '_' . $acom_local . '_parcial';
                         if (!empty($cidade_local[$campo_parcial])) {
-                            // OTIMIZAÇÃO: Registra apenas as 2 primeiras faixas (0 e 1)
+                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
                             // Evita sobrecarga com 10 faixas × múltiplas cidades
                             foreach ($cidade_local[$campo_parcial] as $index => $plano) {
-                                // Pula faixas >= 2 para evitar sobrecarga
-                                if ($index >= 2) {
+                                // Registra apenas índices 0, 1 e 9
+                                if ($index !== 0 && $index !== 1 && $index !== 9) {
                                     continue;
                                 }
 
