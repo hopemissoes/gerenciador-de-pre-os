@@ -12,10 +12,11 @@ if (!defined('ABSPATH')) {
 }
 
 class Gerenciador_Precos_Planos {
-    
+
     private $option_name = 'gpp_cidades_planos';
     private $settings_option = 'gpp_settings';
-    
+    private $cache_cidades = null; // Cache em memória para evitar múltiplas consultas ao banco
+
     public function __construct() {
         // Adiciona menu no admin
         add_action('admin_menu', array($this, 'adicionar_menu_admin'));
@@ -1352,10 +1353,21 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
      * Obtém todas as cidades cadastradas
      */
     private function obter_todas_cidades() {
-        $cidades = get_option($this->option_name, array());
-        return is_array($cidades) ? $cidades : array();
+        // Usa cache em memória para evitar múltiplas consultas ao banco na mesma requisição
+        if ($this->cache_cidades === null) {
+            $cidades = get_option($this->option_name, array());
+            $this->cache_cidades = is_array($cidades) ? $cidades : array();
+        }
+        return $this->cache_cidades;
     }
-    
+
+    /**
+     * Limpa o cache de cidades (chamar após atualizar dados no banco)
+     */
+    private function limpar_cache_cidades() {
+        $this->cache_cidades = null;
+    }
+
     /**
      * Gera slug automático a partir do nome da cidade
      */
@@ -2641,8 +2653,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             $cidades[] = $nova_cidade;
             $mensagem = 'Cidade adicionada com sucesso!';
         }
-        
+
         update_option($this->option_name, $cidades);
+        $this->limpar_cache_cidades(); // Limpa cache após atualizar
         wp_send_json_success(array('message' => $mensagem));
     }
     
@@ -2663,6 +2676,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             unset($cidades[$cidade_id]);
             $cidades = array_values($cidades);
             update_option($this->option_name, $cidades);
+            $this->limpar_cache_cidades(); // Limpa cache após atualizar
             wp_send_json_success('Cidade excluída com sucesso!');
         }
         
@@ -2718,8 +2732,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 $cidade['desconto_personalizado'] = $valor_desconto;
             }
         }
-        
+
         update_option($this->option_name, $cidades);
+        $this->limpar_cache_cidades(); // Limpa cache após atualizar
         wp_send_json_success('Desconto de ' . $valor_desconto . '% aplicado em todas as cidades!');
     }
     
@@ -2741,8 +2756,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             $cidade['tem_desconto_diferenciado'] = false;
             unset($cidade['descontos_diferenciados']);
         }
-        
+
         update_option($this->option_name, $cidades);
+        $this->limpar_cache_cidades(); // Limpa cache após atualizar
         wp_send_json_success('Todos os descontos foram removidos!');
     }
 }
