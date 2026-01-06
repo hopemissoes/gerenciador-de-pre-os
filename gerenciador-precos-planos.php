@@ -16,6 +16,7 @@ class Gerenciador_Precos_Planos {
     private $option_name = 'gpp_cidades_planos';
     private $settings_option = 'gpp_settings';
     private $cache_cidades = null; // Cache em memória para evitar múltiplas consultas ao banco
+    private $cache_mapa_cidades = null; // Mapa indexado por shortcode para acesso direto (sem loops)
 
     public function __construct() {
         // Adiciona menu no admin
@@ -840,19 +841,20 @@ public function pagina_variaveis() {
                         // Total
                         $campo_total = $tipo_key . '_' . $acom . '_total';
                         if (!empty($cidade_data[$campo_total])) {
-                            // Shortcodes para cada faixa etária
+                            // Shortcodes para cada faixa etária (LIMITADO A 3 FAIXAS para melhor performance)
                             foreach ($cidade_data[$campo_total] as $index => $plano) {
+                                // LIMITA A APENAS 3 PRIMEIRAS FAIXAS (0, 1, 2)
+                                if ($index > 2) break;
+
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
 
                                 add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_total, $index, $tipo_key) {
-                                    // Busca dados atualizados do banco de dados
-                                    $cidades_atualizadas = $this->obter_todas_cidades();
-                                    foreach ($cidades_atualizadas as $cidade_atual) {
-                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
-                                            if (!empty($cidade_atual[$campo_total][$index]['valor'])) {
-                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][$index]['valor'], $tipo_key);
-                                            }
-                                            break;
+                                    // Acesso direto ao mapa (sem loops - performance otimizada)
+                                    $mapa = $this->obter_mapa_cidades();
+                                    if (isset($mapa[$shortcode_base])) {
+                                        $cidade_atual = $mapa[$shortcode_base];
+                                        if (!empty($cidade_atual[$campo_total][$index]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][$index]['valor'], $tipo_key);
                                         }
                                     }
                                     return 'N/A';
@@ -862,14 +864,12 @@ public function pagina_variaveis() {
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
                             add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_total, $tipo_key) {
-                                // Busca dados atualizados do banco de dados
-                                $cidades_atualizadas = $this->obter_todas_cidades();
-                                foreach ($cidades_atualizadas as $cidade_atual) {
-                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
-                                        if (!empty($cidade_atual[$campo_total][0]['valor'])) {
-                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][0]['valor'], $tipo_key);
-                                        }
-                                        break;
+                                // Acesso direto ao mapa (sem loops - performance otimizada)
+                                $mapa = $this->obter_mapa_cidades();
+                                if (isset($mapa[$shortcode_base])) {
+                                    $cidade_atual = $mapa[$shortcode_base];
+                                    if (!empty($cidade_atual[$campo_total][0]['valor'])) {
+                                        return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][0]['valor'], $tipo_key);
                                     }
                                 }
                                 return 'N/A';
@@ -879,19 +879,20 @@ public function pagina_variaveis() {
                         // Parcial
                         $campo_parcial = $tipo_key . '_' . $acom . '_parcial';
                         if (!empty($cidade_data[$campo_parcial])) {
-                            // Shortcodes para cada faixa etária
+                            // Shortcodes para cada faixa etária (LIMITADO A 3 FAIXAS para melhor performance)
                             foreach ($cidade_data[$campo_parcial] as $index => $plano) {
+                                // LIMITA A APENAS 3 PRIMEIRAS FAIXAS (0, 1, 2)
+                                if ($index > 2) break;
+
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
 
                                 add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_parcial, $index, $tipo_key) {
-                                    // Busca dados atualizados do banco de dados
-                                    $cidades_atualizadas = $this->obter_todas_cidades();
-                                    foreach ($cidades_atualizadas as $cidade_atual) {
-                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
-                                            if (!empty($cidade_atual[$campo_parcial][$index]['valor'])) {
-                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][$index]['valor'], $tipo_key);
-                                            }
-                                            break;
+                                    // Acesso direto ao mapa (sem loops - performance otimizada)
+                                    $mapa = $this->obter_mapa_cidades();
+                                    if (isset($mapa[$shortcode_base])) {
+                                        $cidade_atual = $mapa[$shortcode_base];
+                                        if (!empty($cidade_atual[$campo_parcial][$index]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][$index]['valor'], $tipo_key);
                                         }
                                     }
                                     return 'N/A';
@@ -901,14 +902,12 @@ public function pagina_variaveis() {
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
                             add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_parcial, $tipo_key) {
-                                // Busca dados atualizados do banco de dados
-                                $cidades_atualizadas = $this->obter_todas_cidades();
-                                foreach ($cidades_atualizadas as $cidade_atual) {
-                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
-                                        if (!empty($cidade_atual[$campo_parcial][0]['valor'])) {
-                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][0]['valor'], $tipo_key);
-                                        }
-                                        break;
+                                // Acesso direto ao mapa (sem loops - performance otimizada)
+                                $mapa = $this->obter_mapa_cidades();
+                                if (isset($mapa[$shortcode_base])) {
+                                    $cidade_atual = $mapa[$shortcode_base];
+                                    if (!empty($cidade_atual[$campo_parcial][0]['valor'])) {
+                                        return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][0]['valor'], $tipo_key);
                                     }
                                 }
                                 return 'N/A';
@@ -1362,10 +1361,33 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     }
 
     /**
+     * Obtém mapa de cidades indexado por shortcode para acesso direto (performance)
+     * Retorna: array['shortcode_base' => cidade_data]
+     */
+    private function obter_mapa_cidades() {
+        // Usa cache em memória
+        if ($this->cache_mapa_cidades === null) {
+            $cidades = $this->obter_todas_cidades();
+            $mapa = array();
+
+            foreach ($cidades as $cidade) {
+                if (isset($cidade['shortcode'])) {
+                    $mapa[$cidade['shortcode']] = $cidade;
+                }
+            }
+
+            $this->cache_mapa_cidades = $mapa;
+        }
+
+        return $this->cache_mapa_cidades;
+    }
+
+    /**
      * Limpa o cache de cidades (chamar após atualizar dados no banco)
      */
     private function limpar_cache_cidades() {
         $this->cache_cidades = null;
+        $this->cache_mapa_cidades = null; // Limpa o mapa também
     }
 
     /**
