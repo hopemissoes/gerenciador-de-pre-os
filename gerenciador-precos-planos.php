@@ -842,17 +842,34 @@ public function pagina_variaveis() {
                             // Shortcodes para cada faixa etária
                             foreach ($cidade_data[$campo_total] as $index => $plano) {
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
-                                
-                                add_shortcode($shortcode_name, function() use ($cidade_data, $plano, $tipo_key) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+
+                                add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_total, $index, $tipo_key) {
+                                    // Busca dados atualizados do banco de dados
+                                    $cidades_atualizadas = $this->obter_todas_cidades();
+                                    foreach ($cidades_atualizadas as $cidade_atual) {
+                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                            if (!empty($cidade_atual[$campo_total][$index]['valor'])) {
+                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][$index]['valor'], $tipo_key);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    return 'N/A';
                                 });
                             }
-                            
+
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
-                            add_shortcode($shortcode_first, function() use ($cidade_data, $campo_total, $tipo_key) {
-                                if (!empty($cidade_data[$campo_total][0]['valor'])) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_total][0]['valor'], $tipo_key);
+                            add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_total, $tipo_key) {
+                                // Busca dados atualizados do banco de dados
+                                $cidades_atualizadas = $this->obter_todas_cidades();
+                                foreach ($cidades_atualizadas as $cidade_atual) {
+                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                        if (!empty($cidade_atual[$campo_total][0]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][0]['valor'], $tipo_key);
+                                        }
+                                        break;
+                                    }
                                 }
                                 return 'N/A';
                             });
@@ -864,17 +881,34 @@ public function pagina_variaveis() {
                             // Shortcodes para cada faixa etária
                             foreach ($cidade_data[$campo_parcial] as $index => $plano) {
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
-                                
-                                add_shortcode($shortcode_name, function() use ($cidade_data, $plano, $tipo_key) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+
+                                add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_parcial, $index, $tipo_key) {
+                                    // Busca dados atualizados do banco de dados
+                                    $cidades_atualizadas = $this->obter_todas_cidades();
+                                    foreach ($cidades_atualizadas as $cidade_atual) {
+                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                            if (!empty($cidade_atual[$campo_parcial][$index]['valor'])) {
+                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][$index]['valor'], $tipo_key);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                    return 'N/A';
                                 });
                             }
-                            
+
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
-                            add_shortcode($shortcode_first, function() use ($cidade_data, $campo_parcial, $tipo_key) {
-                                if (!empty($cidade_data[$campo_parcial][0]['valor'])) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_parcial][0]['valor'], $tipo_key);
+                            add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_parcial, $tipo_key) {
+                                // Busca dados atualizados do banco de dados
+                                $cidades_atualizadas = $this->obter_todas_cidades();
+                                foreach ($cidades_atualizadas as $cidade_atual) {
+                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                        if (!empty($cidade_atual[$campo_parcial][0]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][0]['valor'], $tipo_key);
+                                        }
+                                        break;
+                                    }
                                 }
                                 return 'N/A';
                             });
