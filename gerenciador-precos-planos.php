@@ -849,12 +849,14 @@ public function pagina_variaveis() {
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
 
                                 add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_total, $index, $tipo_key) {
-                                    // Acesso direto ao mapa (sem loops - performance otimizada)
-                                    $mapa = $this->obter_mapa_cidades();
-                                    if (isset($mapa[$shortcode_base])) {
-                                        $cidade_atual = $mapa[$shortcode_base];
-                                        if (!empty($cidade_atual[$campo_total][$index]['valor'])) {
-                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][$index]['valor'], $tipo_key);
+                                    // Busca dados atualizados (igual aos shortcodes de tabela que funcionam)
+                                    $cidades = $this->obter_todas_cidades();
+                                    foreach ($cidades as $cidade_atual) {
+                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                            if (!empty($cidade_atual[$campo_total][$index]['valor'])) {
+                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][$index]['valor'], $tipo_key);
+                                            }
+                                            break;
                                         }
                                     }
                                     return 'N/A';
@@ -864,12 +866,14 @@ public function pagina_variaveis() {
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
                             add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_total, $tipo_key) {
-                                // Acesso direto ao mapa (sem loops - performance otimizada)
-                                $mapa = $this->obter_mapa_cidades();
-                                if (isset($mapa[$shortcode_base])) {
-                                    $cidade_atual = $mapa[$shortcode_base];
-                                    if (!empty($cidade_atual[$campo_total][0]['valor'])) {
-                                        return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][0]['valor'], $tipo_key);
+                                // Busca dados atualizados (igual aos shortcodes de tabela que funcionam)
+                                $cidades = $this->obter_todas_cidades();
+                                foreach ($cidades as $cidade_atual) {
+                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                        if (!empty($cidade_atual[$campo_total][0]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_total][0]['valor'], $tipo_key);
+                                        }
+                                        break;
                                     }
                                 }
                                 return 'N/A';
@@ -887,12 +891,14 @@ public function pagina_variaveis() {
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
 
                                 add_shortcode($shortcode_name, function() use ($shortcode_base, $campo_parcial, $index, $tipo_key) {
-                                    // Acesso direto ao mapa (sem loops - performance otimizada)
-                                    $mapa = $this->obter_mapa_cidades();
-                                    if (isset($mapa[$shortcode_base])) {
-                                        $cidade_atual = $mapa[$shortcode_base];
-                                        if (!empty($cidade_atual[$campo_parcial][$index]['valor'])) {
-                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][$index]['valor'], $tipo_key);
+                                    // Busca dados atualizados (igual aos shortcodes de tabela que funcionam)
+                                    $cidades = $this->obter_todas_cidades();
+                                    foreach ($cidades as $cidade_atual) {
+                                        if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                            if (!empty($cidade_atual[$campo_parcial][$index]['valor'])) {
+                                                return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][$index]['valor'], $tipo_key);
+                                            }
+                                            break;
                                         }
                                     }
                                     return 'N/A';
@@ -902,12 +908,14 @@ public function pagina_variaveis() {
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
                             $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
                             add_shortcode($shortcode_first, function() use ($shortcode_base, $campo_parcial, $tipo_key) {
-                                // Acesso direto ao mapa (sem loops - performance otimizada)
-                                $mapa = $this->obter_mapa_cidades();
-                                if (isset($mapa[$shortcode_base])) {
-                                    $cidade_atual = $mapa[$shortcode_base];
-                                    if (!empty($cidade_atual[$campo_parcial][0]['valor'])) {
-                                        return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][0]['valor'], $tipo_key);
+                                // Busca dados atualizados (igual aos shortcodes de tabela que funcionam)
+                                $cidades = $this->obter_todas_cidades();
+                                foreach ($cidades as $cidade_atual) {
+                                    if ($cidade_atual['shortcode'] === $shortcode_base) {
+                                        if (!empty($cidade_atual[$campo_parcial][0]['valor'])) {
+                                            return $this->obter_valor_formatado_simples($cidade_atual, $cidade_atual[$campo_parcial][0]['valor'], $tipo_key);
+                                        }
+                                        break;
                                     }
                                 }
                                 return 'N/A';
