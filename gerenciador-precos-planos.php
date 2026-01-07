@@ -2730,6 +2730,31 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             return;
         }
 
+        // Não processa no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return;
+        }
+
+        // Verifica se está em modo de edição do Elementor
+        if (class_exists('\Elementor\Plugin')) {
+            if (\Elementor\Plugin::$instance->preview->is_preview_mode()) {
+                return;
+            }
+            if (\Elementor\Plugin::$instance->editor->is_edit_mode()) {
+                return;
+            }
+        }
+
+        // Não processa em outros page builders comuns
+        if (isset($_GET['action']) && in_array($_GET['action'], array('elementor', 'fl_builder'))) {
+            return;
+        }
+
+        // Não processa em requisições AJAX
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return;
+        }
+
         ob_start(array($this, 'processar_schemas_html'));
 
         // Garante que o buffer seja finalizado
