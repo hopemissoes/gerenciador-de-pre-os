@@ -91,17 +91,18 @@ class Gerenciador_Precos_Planos {
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
 
-        // ===== NOVA FUNCIONALIDADE: Processa variáveis %variavel% em meta tags e schemas =====
-        // DESABILITADO: Output buffering causava conflito com Elementor
-        // add_action('template_redirect', array($this, 'iniciar_output_buffering'));
+        // ===== NOVA FUNCIONALIDADE: Processa variáveis %variavel% em schemas e meta tags =====
+        // Usa APENAS filtros específicos do RankMath (não interfere com page builders)
 
-        // Filtros específicos do RankMath para processar variáveis %variavel%
+        // Filtros RankMath para Open Graph
         add_filter('rank_math/opengraph/facebook/product_price_amount', array($this, 'processar_variaveis_percentual'), 999);
         add_filter('rank_math/opengraph/facebook/product_price_currency', array($this, 'processar_variaveis_percentual'), 999);
+
+        // Filtro RankMath para schemas JSON-LD
         add_filter('rank_math/json_ld', array($this, 'processar_variaveis_schema_rankmath'), 999, 2);
 
-        // Adiciona processamento para o HTML final via wp_head (mais seguro que output buffering)
-        add_action('wp_head', array($this, 'processar_meta_tags_head'), 999);
+        // Processa todo o array de Open Graph do RankMath
+        add_filter('rank_math/opengraph/facebook', array($this, 'processar_opengraph_array'), 999);
     }
     
     /**
@@ -2878,9 +2879,32 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     }
 
     /**
-     * Processa meta tags no wp_head usando JavaScript (alternativa ao output buffering)
-     * Isso não interfere com page builders como Elementor
+     * Processa recursivamente arrays do Open Graph para substituir variáveis %variavel%
+     *
+     * @param array $data Array de dados do Open Graph
+     * @return array Array processado
      */
+    public function processar_opengraph_array($data) {
+        if (empty($data) || !is_array($data)) {
+            return $data;
+        }
+
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->processar_opengraph_array($value);
+            } elseif (is_string($value)) {
+                $data[$key] = $this->processar_variaveis_percentual($value);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * DESABILITADO - Processa meta tags no wp_head usando JavaScript
+     * Causava conflito com Elementor mesmo sendo client-side
+     */
+    /*
     public function processar_meta_tags_head() {
         // Só processa no frontend
         if (is_admin()) {
@@ -3020,6 +3044,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         </script>
         <?php
     }
+    */
 }
 
 // Inicializa o plugin
