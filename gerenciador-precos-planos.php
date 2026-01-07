@@ -841,10 +841,14 @@ public function pagina_variaveis() {
                         // Total
                         $campo_total = $tipo_key . '_' . $acom . '_total';
                         if (!empty($cidade_data[$campo_total])) {
-                            // Shortcodes para cada faixa etária (LIMITADO A 3 FAIXAS para melhor performance)
+                            // Shortcodes para faixas etárias específicas: 0 (primeira), 1 (segunda), 9 (última)
+                            $faixas_permitidas = array(0, 1, 9);
+
                             foreach ($cidade_data[$campo_total] as $index => $plano) {
-                                // LIMITA A APENAS 3 PRIMEIRAS FAIXAS (0, 1, 2)
-                                if ($index > 2) break;
+                                // Cria shortcode apenas para índices 0, 1 e 9
+                                if (!in_array($index, $faixas_permitidas)) {
+                                    continue;
+                                }
 
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
 
@@ -883,10 +887,14 @@ public function pagina_variaveis() {
                         // Parcial
                         $campo_parcial = $tipo_key . '_' . $acom . '_parcial';
                         if (!empty($cidade_data[$campo_parcial])) {
-                            // Shortcodes para cada faixa etária (LIMITADO A 3 FAIXAS para melhor performance)
+                            // Shortcodes para faixas etárias específicas: 0 (primeira), 1 (segunda), 9 (última)
+                            $faixas_permitidas = array(0, 1, 9);
+
                             foreach ($cidade_data[$campo_parcial] as $index => $plano) {
-                                // LIMITA A APENAS 3 PRIMEIRAS FAIXAS (0, 1, 2)
-                                if ($index > 2) break;
+                                // Cria shortcode apenas para índices 0, 1 e 9
+                                if (!in_array($index, $faixas_permitidas)) {
+                                    continue;
+                                }
 
                                 $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
 
