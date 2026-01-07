@@ -11,15 +11,17 @@ if (!defined('ABSPATH')) exit;
 class Schema_Variables_Processor {
 
     public function __construct() {
-        // Processa variáveis no wp_head (alta prioridade para executar cedo)
-        add_action('wp_head', array($this, 'processar_variaveis_head'), 999);
+        // Inicia output buffering ANTES de tudo
+        add_action('template_redirect', array($this, 'iniciar_buffer'), 1);
+
+        // Finaliza output buffering DEPOIS de tudo
+        add_action('shutdown', array($this, 'finalizar_buffer'), 0);
     }
 
     /**
-     * Processa variáveis %variavel% no HTML do head
-     * Usa output buffering de forma segura
+     * Inicia o output buffering
      */
-    public function processar_variaveis_head() {
+    public function iniciar_buffer() {
         // NÃO processa no admin
         if (is_admin()) {
             return;
@@ -45,6 +47,15 @@ class Schema_Variables_Processor {
 
         // Inicia output buffering
         ob_start(array($this, 'processar_buffer'));
+    }
+
+    /**
+     * Finaliza o output buffering
+     */
+    public function finalizar_buffer() {
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
     }
 
     /**
