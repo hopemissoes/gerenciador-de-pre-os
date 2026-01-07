@@ -2865,6 +2865,33 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
      * @return array Schema processado
      */
     public function processar_variaveis_schema_rankmath($data, $jsonld) {
+        // Não processa no admin
+        if (is_admin()) {
+            return $data;
+        }
+
+        // Não processa no Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return $data;
+        }
+
+        // Verifica se está em modo de edição do Elementor
+        if (class_exists('\Elementor\Plugin')) {
+            if (method_exists(\Elementor\Plugin::$instance->preview, 'is_preview_mode') &&
+                \Elementor\Plugin::$instance->preview->is_preview_mode()) {
+                return $data;
+            }
+            if (method_exists(\Elementor\Plugin::$instance->editor, 'is_edit_mode') &&
+                \Elementor\Plugin::$instance->editor->is_edit_mode()) {
+                return $data;
+            }
+        }
+
+        // Não processa em AJAX
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return $data;
+        }
+
         if (empty($data)) {
             return $data;
         }
@@ -2885,6 +2912,33 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
      * @return array Array processado
      */
     public function processar_opengraph_array($data) {
+        // Não processa no admin
+        if (is_admin()) {
+            return $data;
+        }
+
+        // Não processa no Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return $data;
+        }
+
+        // Verifica se está em modo de edição do Elementor
+        if (class_exists('\Elementor\Plugin')) {
+            if (method_exists(\Elementor\Plugin::$instance->preview, 'is_preview_mode') &&
+                \Elementor\Plugin::$instance->preview->is_preview_mode()) {
+                return $data;
+            }
+            if (method_exists(\Elementor\Plugin::$instance->editor, 'is_edit_mode') &&
+                \Elementor\Plugin::$instance->editor->is_edit_mode()) {
+                return $data;
+            }
+        }
+
+        // Não processa em AJAX
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return $data;
+        }
+
         if (empty($data) || !is_array($data)) {
             return $data;
         }
