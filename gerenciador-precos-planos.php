@@ -572,7 +572,13 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_total] as $idx => $plano): 
+                                                <?php
+                                                // Lista apenas faixas 0, 1 e 9 para melhor performance
+                                                $faixas_permitidas = array(0, 1, 9);
+                                                foreach ($cidade[$campo_total] as $idx => $plano):
+                                                    if (!in_array($idx, $faixas_permitidas)) {
+                                                        continue;
+                                                    }
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'total_' . $idx;
                                                 ?>
                                                     <tr>
@@ -603,7 +609,13 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_parcial] as $idx => $plano): 
+                                                <?php
+                                                // Lista apenas faixas 0, 1 e 9 para melhor performance
+                                                $faixas_permitidas = array(0, 1, 9);
+                                                foreach ($cidade[$campo_parcial] as $idx => $plano):
+                                                    if (!in_array($idx, $faixas_permitidas)) {
+                                                        continue;
+                                                    }
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'parcial_' . $idx;
                                                 ?>
                                                     <tr>
