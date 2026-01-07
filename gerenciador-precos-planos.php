@@ -90,6 +90,9 @@ class Gerenciador_Precos_Planos {
         // Processa shortcodes em custom fields (ACF e outros)
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
+
+        // ===== NOVA FUNCIONALIDADE: Processa variáveis em schemas JSON-LD =====
+        add_action('template_redirect', array($this, 'iniciar_output_buffering'));
     }
     
     /**
@@ -2710,6 +2713,79 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * ===== FUNCIONALIDADE DE PROCESSAMENTO DE SCHEMAS JSON-LD =====
+     * Inicia o output buffering para capturar e processar o HTML da página
+     */
+    public function iniciar_output_buffering() {
+        // Só processa no frontend, não no admin
+        if (is_admin()) {
+            return;
+        }
+
+        ob_start(array($this, 'processar_schemas_html'));
+    }
+
+    /**
+     * Processa o HTML capturado e substitui variáveis %variavel% em schemas JSON-LD
+     *
+     * @param string $html O HTML completo da página
+     * @return string O HTML processado com variáveis substituídas
+     */
+    public function processar_schemas_html($html) {
+        // Procura por todos os schemas JSON-LD na página
+        // Padrão: <script type="application/ld+json">...</script>
+        $pattern = '/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is';
+
+        $html = preg_replace_callback($pattern, function($matches) {
+            $schema_content = $matches[1];
+
+            // Busca todas as variáveis no formato %variavel%
+            preg_match_all('/%([^%]+)%/', $schema_content, $var_matches);
+
+            if (!empty($var_matches[1])) {
+                foreach ($var_matches[1] as $variavel) {
+                    // Busca o valor da variável executando o shortcode correspondente
+                    $valor = $this->obter_valor_variavel($variavel);
+
+                    if ($valor !== false) {
+                        // Substitui a variável pelo valor real
+                        $schema_content = str_replace("%{$variavel}%", $valor, $schema_content);
+                    }
+                }
+            }
+
+            // Retorna o schema com as variáveis substituídas
+            return '<script type="application/ld+json">' . $schema_content . '</script>';
+        }, $html);
+
+        return $html;
+    }
+
+    /**
+     * Obtém o valor de uma variável do gerenciador de preços
+     *
+     * @param string $variavel Nome da variável (ex: fortaleza_emp_ambulatorialtotal_0)
+     * @return mixed O valor da variável ou false se não encontrado
+     */
+    private function obter_valor_variavel($variavel) {
+        // Tenta executar o shortcode correspondente
+        // Exemplo: %fortaleza_emp_ambulatorialtotal_0% -> [fortaleza_emp_ambulatorialtotal_0]
+        $shortcode_result = do_shortcode("[{$variavel}]");
+
+        // Se o shortcode retornou algo diferente do próprio código, é um valor válido
+        if ($shortcode_result !== "[{$variavel}]") {
+            // Remove "R$ " e formata apenas o número para usar no schema
+            $valor_limpo = str_replace(array('R$', ' '), '', $shortcode_result);
+            $valor_limpo = str_replace('.', '', $valor_limpo);
+            $valor_limpo = str_replace(',', '.', $valor_limpo);
+
+            return $valor_limpo;
+        }
+
+        return false;
     }
 }
 
