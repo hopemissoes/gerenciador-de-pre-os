@@ -38,6 +38,10 @@ class Gerenciador_Precos_Planos {
         add_action('wp_ajax_gpp_buscar_cidade', array($this, 'ajax_buscar_cidade'));
         add_action('wp_ajax_gpp_aplicar_desconto_global', array($this, 'ajax_aplicar_desconto_global'));
         add_action('wp_ajax_gpp_remover_todos_descontos', array($this, 'ajax_remover_todos_descontos'));
+
+        // AJAX para obter valor de variável (usado pelo JavaScript client-side)
+        add_action('wp_ajax_nopriv_gpp_obter_valor_variavel', array($this, 'ajax_obter_valor_variavel'));
+        add_action('wp_ajax_gpp_obter_valor_variavel', array($this, 'ajax_obter_valor_variavel'));
         
         // Adiciona submenu de variáveis
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
@@ -94,6 +98,9 @@ class Gerenciador_Precos_Planos {
         // Processa shortcodes em custom fields (ACF e outros)
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
+
+        // Injeta JavaScript para processar variáveis %variavel% no browser (não quebra Elementor)
+        add_action('wp_footer', array($this, 'injetar_javascript_processador'), 999);
     }
     
     /**
@@ -2714,6 +2721,137 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * AJAX: Retorna o valor de uma variável para o JavaScript
+     */
+    public function ajax_obter_valor_variavel() {
+        if (!isset($_POST['variavel'])) {
+            wp_send_json_error('Variável não informada');
+        }
+
+        $variavel = sanitize_text_field($_POST['variavel']);
+
+        // Executa o shortcode correspondente
+        $shortcode_result = do_shortcode("[{$variavel}]");
+
+        // Se o shortcode retornou algo válido
+        if ($shortcode_result !== "[{$variavel}]") {
+            // Remove "R$ " e formata apenas o número
+            $valor_limpo = str_replace(array('R$', ' '), '', $shortcode_result);
+            $valor_limpo = str_replace('.', '', $valor_limpo);
+            $valor_limpo = str_replace(',', '.', $valor_limpo);
+
+            wp_send_json_success(array('valor' => $valor_limpo));
+        }
+
+        wp_send_json_error('Variável não encontrada');
+    }
+
+    /**
+     * Injeta JavaScript que processa variáveis %variavel% no navegador
+     * Solução client-side que NÃO quebra o Elementor
+     */
+    public function injetar_javascript_processador() {
+        // NÃO processa no admin
+        if (is_admin()) {
+            return;
+        }
+
+        // NÃO processa no Elementor (verificações rigorosas)
+        if (isset($_GET['elementor-preview']) ||
+            isset($_GET['elementor_library']) ||
+            isset($_GET['elementor-edit']) ||
+            isset($_GET['action']) && in_array($_GET['action'], array('elementor', 'elementor_ajax'))) {
+            return;
+        }
+
+        // Processa apenas no frontend público
+        if (!is_singular()) {
+            return;
+        }
+
+        // Busca variáveis que estão sendo usadas na página atual
+        // Vamos processar apenas as variáveis que realmente existem no HTML
+        ?>
+        <script type="text/javascript">
+        (function() {
+            'use strict';
+
+            // Função para processar uma variável
+            function processarVariavel(variavel) {
+                // Faz requisição AJAX para obter o valor
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response.success && response.data) {
+                                substituirVariavel(variavel, response.data.valor);
+                            }
+                        } catch(e) {
+                            console.error('Erro ao processar variável:', e);
+                        }
+                    }
+                };
+
+                xhr.send('action=gpp_obter_valor_variavel&variavel=' + encodeURIComponent(variavel));
+            }
+
+            // Função para substituir a variável no DOM
+            function substituirVariavel(variavel, valor) {
+                var pattern = '%' + variavel + '%';
+
+                // Processa meta tags
+                var metaTags = document.querySelectorAll('meta[content*="' + pattern + '"]');
+                metaTags.forEach(function(meta) {
+                    var content = meta.getAttribute('content');
+                    if (content) {
+                        content = content.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), valor);
+                        meta.setAttribute('content', content);
+                    }
+                });
+
+                // Processa schemas JSON-LD
+                var schemas = document.querySelectorAll('script[type="application/ld+json"]');
+                schemas.forEach(function(schema) {
+                    var content = schema.textContent;
+                    if (content.indexOf(pattern) !== -1) {
+                        content = content.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), valor);
+                        schema.textContent = content;
+                    }
+                });
+            }
+
+            // Procura todas as variáveis %variavel% no HTML
+            function buscarEProcessarVariaveis() {
+                var html = document.documentElement.outerHTML;
+                var regex = /%([^%]+)%/g;
+                var matches;
+                var variaveis = {};
+
+                while ((matches = regex.exec(html)) !== null) {
+                    var variavel = matches[1];
+                    if (!variaveis[variavel]) {
+                        variaveis[variavel] = true;
+                        processarVariavel(variavel);
+                    }
+                }
+            }
+
+            // Executa quando o DOM estiver pronto
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', buscarEProcessarVariaveis);
+            } else {
+                buscarEProcessarVariaveis();
+            }
+        })();
+        </script>
+        <?php
     }
 }
 
