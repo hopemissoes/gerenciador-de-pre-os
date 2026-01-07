@@ -90,6 +90,10 @@ class Gerenciador_Precos_Planos {
         // Processa shortcodes em custom fields (ACF e outros)
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
+
+        // Processa variáveis %variavel% em meta tags específicas do RankMath
+        add_filter('rank_math/opengraph/facebook/product_price_amount', array($this, 'processar_variavel_percentual_simples'), 999);
+        add_filter('rank_math/opengraph/facebook/product_price_currency', array($this, 'processar_variavel_percentual_simples'), 999);
     }
     
     /**
@@ -2710,6 +2714,63 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * Processa variáveis no formato %variavel% em strings
+     * Função ULTRA SIMPLES para evitar quebrar Elementor
+     *
+     * @param string $content Conteúdo com variáveis
+     * @return string Conteúdo processado
+     */
+    public function processar_variavel_percentual_simples($content) {
+        // VERIFICAÇÕES RIGOROSAS - Não processa em contextos problemáticos
+        if (is_admin()) {
+            return $content;
+        }
+
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return $content;
+        }
+
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library']) || isset($_GET['elementor-edit'])) {
+            return $content;
+        }
+
+        if (isset($_GET['action']) && in_array($_GET['action'], array('elementor', 'elementor_ajax'))) {
+            return $content;
+        }
+
+        // Verifica se não é string ou está vazio
+        if (empty($content) || !is_string($content)) {
+            return $content;
+        }
+
+        // Se não tem %, retorna direto
+        if (strpos($content, '%') === false) {
+            return $content;
+        }
+
+        // Busca variáveis no formato %variavel%
+        if (preg_match('/%([^%]+)%/', $content, $matches)) {
+            $variavel = $matches[1];
+
+            // Tenta executar o shortcode correspondente
+            $shortcode_result = do_shortcode("[{$variavel}]");
+
+            // Se o shortcode retornou algo válido
+            if ($shortcode_result !== "[{$variavel}]") {
+                // Remove "R$ " e formata apenas o número
+                $valor_limpo = str_replace(array('R$', ' '), '', $shortcode_result);
+                $valor_limpo = str_replace('.', '', $valor_limpo);
+                $valor_limpo = str_replace(',', '.', $valor_limpo);
+
+                // Substitui a variável pelo valor
+                $content = str_replace("%{$variavel}%", $valor_limpo, $content);
+            }
+        }
+
+        return $content;
     }
 }
 
