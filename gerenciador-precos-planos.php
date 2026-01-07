@@ -91,13 +91,17 @@ class Gerenciador_Precos_Planos {
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
 
-        // ===== NOVA FUNCIONALIDADE: Processa variáveis em schemas JSON-LD =====
-        add_action('template_redirect', array($this, 'iniciar_output_buffering'));
+        // ===== NOVA FUNCIONALIDADE: Processa variáveis %variavel% em meta tags e schemas =====
+        // DESABILITADO: Output buffering causava conflito com Elementor
+        // add_action('template_redirect', array($this, 'iniciar_output_buffering'));
 
-        // Adiciona filtros para processar variáveis %variavel% em meta tags e schemas
+        // Filtros específicos do RankMath para processar variáveis %variavel%
         add_filter('rank_math/opengraph/facebook/product_price_amount', array($this, 'processar_variaveis_percentual'), 999);
         add_filter('rank_math/opengraph/facebook/product_price_currency', array($this, 'processar_variaveis_percentual'), 999);
         add_filter('rank_math/json_ld', array($this, 'processar_variaveis_schema_rankmath'), 999, 2);
+
+        // Adiciona processamento para o HTML final via wp_head (mais seguro que output buffering)
+        add_action('wp_head', array($this, 'processar_meta_tags_head'), 999);
     }
     
     /**
@@ -2871,6 +2875,150 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         $json_string = $this->processar_variaveis_percentual($json_string);
 
         return json_decode($json_string, true);
+    }
+
+    /**
+     * Processa meta tags no wp_head usando JavaScript (alternativa ao output buffering)
+     * Isso não interfere com page builders como Elementor
+     */
+    public function processar_meta_tags_head() {
+        // Só processa no frontend
+        if (is_admin()) {
+            return;
+        }
+
+        // Não processa no Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return;
+        }
+
+        // Coleta todas as variáveis disponíveis
+        $variaveis_disponiveis = array();
+
+        // Busca todas as cidades e suas variáveis
+        $cidades = $this->obter_todas_cidades();
+
+        if (!empty($cidades)) {
+            foreach ($cidades as $cidade_data) {
+                $shortcode_base = $cidade_data['shortcode'];
+
+                $tipos_plano = array(
+                    'empresarial' => 'emp',
+                    'individual' => 'ind',
+                    'pme' => 'pme',
+                    'adesao' => 'ade'
+                );
+
+                $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
+
+                foreach ($tipos_plano as $tipo_key => $tipo_sigla) {
+                    if (!isset($cidade_data['tipos_planos_ativos'][$tipo_key]) || !$cidade_data['tipos_planos_ativos'][$tipo_key]) {
+                        continue;
+                    }
+
+                    foreach ($acomodacoes as $acom) {
+                        $campo_ativo_acom = $tipo_key . '_' . $acom . '_ativo';
+                        if (!isset($cidade_data[$campo_ativo_acom]) || !$cidade_data[$campo_ativo_acom]) {
+                            continue;
+                        }
+
+                        // Total
+                        $campo_total = $tipo_key . '_' . $acom . '_total';
+                        if (!empty($cidade_data[$campo_total])) {
+                            // Shortcode sem índice (primeira faixa)
+                            $var_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
+                            $valor = $this->obter_valor_variavel($var_name);
+                            if ($valor !== false) {
+                                $variaveis_disponiveis[$var_name] = $valor;
+                            }
+
+                            // Todas as faixas
+                            foreach ($cidade_data[$campo_total] as $index => $plano) {
+                                $var_name_index = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
+                                $valor_index = $this->obter_valor_variavel($var_name_index);
+                                if ($valor_index !== false) {
+                                    $variaveis_disponiveis[$var_name_index] = $valor_index;
+                                }
+                            }
+                        }
+
+                        // Parcial
+                        $campo_parcial = $tipo_key . '_' . $acom . '_parcial';
+                        if (!empty($cidade_data[$campo_parcial])) {
+                            // Shortcode sem índice (primeira faixa)
+                            $var_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
+                            $valor = $this->obter_valor_variavel($var_name);
+                            if ($valor !== false) {
+                                $variaveis_disponiveis[$var_name] = $valor;
+                            }
+
+                            // Todas as faixas
+                            foreach ($cidade_data[$campo_parcial] as $index => $plano) {
+                                $var_name_index = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
+                                $valor_index = $this->obter_valor_variavel($var_name_index);
+                                if ($valor_index !== false) {
+                                    $variaveis_disponiveis[$var_name_index] = $valor_index;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (empty($variaveis_disponiveis)) {
+            return;
+        }
+
+        // Injeta JavaScript para processar as variáveis no DOM
+        ?>
+        <script type="text/javascript">
+        (function() {
+            var variaveis = <?php echo wp_json_encode($variaveis_disponiveis); ?>;
+
+            // Processa meta tags quando o DOM estiver pronto
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', processarMetaTags);
+            } else {
+                processarMetaTags();
+            }
+
+            function processarMetaTags() {
+                // Processa todas as meta tags
+                var metaTags = document.querySelectorAll('meta[property*="price"], meta[content*="%"]');
+
+                metaTags.forEach(function(meta) {
+                    var content = meta.getAttribute('content');
+                    if (content && content.indexOf('%') !== -1) {
+                        for (var variavel in variaveis) {
+                            var pattern = '%' + variavel + '%';
+                            if (content.indexOf(pattern) !== -1) {
+                                content = content.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), variaveis[variavel]);
+                            }
+                        }
+                        meta.setAttribute('content', content);
+                    }
+                });
+
+                // Processa schemas JSON-LD
+                var schemas = document.querySelectorAll('script[type="application/ld+json"]');
+
+                schemas.forEach(function(schema) {
+                    var content = schema.textContent;
+                    if (content.indexOf('%') !== -1) {
+                        for (var variavel in variaveis) {
+                            var pattern = '%' + variavel + '%';
+                            if (content.indexOf(pattern) !== -1) {
+                                content = content.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), variaveis[variavel]);
+                            }
+                        }
+                        schema.textContent = content;
+                    }
+                });
+            }
+        })();
+        </script>
+        <?php
     }
 }
 
