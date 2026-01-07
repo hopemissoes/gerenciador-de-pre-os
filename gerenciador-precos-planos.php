@@ -68,7 +68,9 @@ class Gerenciador_Precos_Planos {
         add_filter('rank_math/opengraph/facebook/description', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/title', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/description', 'do_shortcode', 11);
-        
+        add_filter('rank_math/opengraph/facebook/product_price_amount', 'do_shortcode', 11);
+        add_filter('rank_math/opengraph/facebook/product_price_currency', 'do_shortcode', 11);
+
         // === ALL IN ONE SEO ===
         add_filter('aioseop_title', 'do_shortcode', 11);
         add_filter('aioseop_description', 'do_shortcode', 11);
