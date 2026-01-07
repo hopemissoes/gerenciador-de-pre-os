@@ -93,6 +93,11 @@ class Gerenciador_Precos_Planos {
 
         // ===== NOVA FUNCIONALIDADE: Processa variáveis em schemas JSON-LD =====
         add_action('template_redirect', array($this, 'iniciar_output_buffering'));
+
+        // Adiciona filtros para processar variáveis %variavel% em meta tags e schemas
+        add_filter('rank_math/opengraph/facebook/product_price_amount', array($this, 'processar_variaveis_percentual'), 999);
+        add_filter('rank_math/opengraph/facebook/product_price_currency', array($this, 'processar_variaveis_percentual'), 999);
+        add_filter('rank_math/json_ld', array($this, 'processar_variaveis_schema_rankmath'), 999, 2);
     }
     
     /**
@@ -2726,40 +2731,45 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         }
 
         ob_start(array($this, 'processar_schemas_html'));
+
+        // Garante que o buffer seja finalizado
+        add_action('shutdown', array($this, 'finalizar_output_buffering'), 0);
     }
 
     /**
-     * Processa o HTML capturado e substitui variáveis %variavel% em schemas JSON-LD
+     * Finaliza o output buffering e libera o conteúdo processado
+     */
+    public function finalizar_output_buffering() {
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+    }
+
+    /**
+     * Processa o HTML capturado e substitui variáveis %variavel% em todo o HTML
+     * (meta tags, schemas JSON-LD, etc)
      *
      * @param string $html O HTML completo da página
      * @return string O HTML processado com variáveis substituídas
      */
     public function processar_schemas_html($html) {
-        // Procura por todos os schemas JSON-LD na página
-        // Padrão: <script type="application/ld+json">...</script>
-        $pattern = '/<script[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is';
+        // Busca todas as variáveis no formato %variavel% em TODO o HTML
+        preg_match_all('/%([^%]+)%/', $html, $var_matches);
 
-        $html = preg_replace_callback($pattern, function($matches) {
-            $schema_content = $matches[1];
+        if (!empty($var_matches[1])) {
+            // Remove duplicatas para processar cada variável apenas uma vez
+            $variaveis_unicas = array_unique($var_matches[1]);
 
-            // Busca todas as variáveis no formato %variavel%
-            preg_match_all('/%([^%]+)%/', $schema_content, $var_matches);
+            foreach ($variaveis_unicas as $variavel) {
+                // Busca o valor da variável executando o shortcode correspondente
+                $valor = $this->obter_valor_variavel($variavel);
 
-            if (!empty($var_matches[1])) {
-                foreach ($var_matches[1] as $variavel) {
-                    // Busca o valor da variável executando o shortcode correspondente
-                    $valor = $this->obter_valor_variavel($variavel);
-
-                    if ($valor !== false) {
-                        // Substitui a variável pelo valor real
-                        $schema_content = str_replace("%{$variavel}%", $valor, $schema_content);
-                    }
+                if ($valor !== false) {
+                    // Substitui TODAS as ocorrências da variável pelo valor real
+                    $html = str_replace("%{$variavel}%", $valor, $html);
                 }
             }
-
-            // Retorna o schema com as variáveis substituídas
-            return '<script type="application/ld+json">' . $schema_content . '</script>';
-        }, $html);
+        }
 
         return $html;
     }
@@ -2786,6 +2796,56 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         }
 
         return false;
+    }
+
+    /**
+     * Processa variáveis no formato %variavel% em strings
+     *
+     * @param string $content Conteúdo com variáveis
+     * @return string Conteúdo processado
+     */
+    public function processar_variaveis_percentual($content) {
+        if (empty($content) || !is_string($content)) {
+            return $content;
+        }
+
+        // Busca todas as variáveis no formato %variavel%
+        preg_match_all('/%([^%]+)%/', $content, $var_matches);
+
+        if (!empty($var_matches[1])) {
+            $variaveis_unicas = array_unique($var_matches[1]);
+
+            foreach ($variaveis_unicas as $variavel) {
+                $valor = $this->obter_valor_variavel($variavel);
+
+                if ($valor !== false) {
+                    $content = str_replace("%{$variavel}%", $valor, $content);
+                }
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * Processa variáveis %variavel% em schemas JSON-LD do RankMath
+     *
+     * @param array $data Array com dados do schema
+     * @param object $jsonld Objeto JsonLD do RankMath
+     * @return array Schema processado
+     */
+    public function processar_variaveis_schema_rankmath($data, $jsonld) {
+        if (empty($data)) {
+            return $data;
+        }
+
+        // Converte para JSON, processa e retorna como array
+        $json_string = wp_json_encode($data);
+
+        // Processa variáveis no JSON
+        $json_string = $this->processar_variaveis_percentual($json_string);
+
+        return json_decode($json_string, true);
     }
 }
 
