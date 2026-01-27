@@ -1360,23 +1360,50 @@ public function pagina_variaveis() {
             $shortcode_tabela = $regiao . '_tabela';
             $regiao_local = $regiao;
 
-            add_shortcode($shortcode_tabela, function() use ($valores, $regiao_local, $campos) {
-                $output = '';
-
-                foreach ($campos as $campo_key => $campo_label) {
-                    $valor = 'N/A';
-
-                    if (isset($valores[$regiao_local][$campo_key]) && !empty($valores[$regiao_local][$campo_key])) {
-                        $valor = esc_html($valores[$regiao_local][$campo_key]);
-                    }
-
-                    $output .= $campo_label . ': ' . $valor . "\n";
-                }
-
-                // Remove a última quebra de linha
-                return rtrim($output);
+            add_shortcode($shortcode_tabela, function() use ($plugin_instance, $valores, $regiao_local, $campos) {
+                return $plugin_instance->renderizar_tabela_regional($valores, $regiao_local, $campos);
             });
         }
+    }
+
+    /**
+     * Renderiza a tabela de valores regionais em HTML
+     */
+    public function renderizar_tabela_regional($valores, $regiao, $campos) {
+        ob_start();
+        ?>
+        <div class="gpp-container-cidade">
+            <div class="tabela-precos-hapvida">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Procedimento</th>
+                            <th>Valor de Coparticipação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($campos as $campo_key => $campo_label): ?>
+                            <tr>
+                                <td><?php echo esc_html($campo_label); ?></td>
+                                <td>
+                                    <span class="valor-destaque">
+                                        <?php
+                                        if (isset($valores[$regiao][$campo_key]) && !empty($valores[$regiao][$campo_key])) {
+                                            echo esc_html($valores[$regiao][$campo_key]);
+                                        } else {
+                                            echo 'N/A';
+                                        }
+                                        ?>
+                                    </span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**
