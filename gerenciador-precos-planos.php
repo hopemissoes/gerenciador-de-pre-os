@@ -1902,15 +1902,18 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             width: 100%;
             border-collapse: collapse;
             margin: 20px 0;
-            overflow-x: auto;
+            overflow: hidden;
             display: block;
+            border-radius: 20px !important;
         }
-        
+
         .tabela-precos-hapvida table {
             width: 100%;
             border-collapse: collapse;
+            border-radius: 20px !important;
+            overflow: hidden;
         }
-        
+
         .tabela-precos-hapvida table th {
             background-color: #0054B8 !important;
             color: #FFFFFF !important;
@@ -1918,6 +1921,22 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             text-align: left !important;
             font-weight: bold !important;
             border: none !important;
+        }
+
+        .tabela-precos-hapvida table thead tr th:first-child {
+            border-top-left-radius: 20px !important;
+        }
+
+        .tabela-precos-hapvida table thead tr th:last-child {
+            border-top-right-radius: 20px !important;
+        }
+
+        .tabela-precos-hapvida table tbody tr:last-child td:first-child {
+            border-bottom-left-radius: 20px !important;
+        }
+
+        .tabela-precos-hapvida table tbody tr:last-child td:last-child {
+            border-bottom-right-radius: 20px !important;
         }
         
         .tabela-precos-hapvida table tbody tr td {
