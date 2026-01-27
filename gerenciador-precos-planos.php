@@ -20,26 +20,23 @@ class Gerenciador_Precos_Planos {
     public function __construct() {
         // Adiciona menu no admin
         add_action('admin_menu', array($this, 'adicionar_menu_admin'));
-        
-        // Registra shortcode dinâmico
-        add_action('init', array($this, 'registrar_shortcodes'));
-        
-        // Registra shortcodes de variáveis dinâmicas
-        add_action('init', array($this, 'registrar_shortcodes_variaveis'));
-        
+
+        // Registra shortcodes COM PROTEÇÃO para não registrar em requisições Elementor
+        add_action('init', array($this, 'registrar_shortcodes_com_protecao'), 999);
+
         // ===== NOVA FUNCIONALIDADE: Registra variáveis no RankMath =====
         add_action('rank_math/vars/register', array($this, 'registrar_variaveis_rankmath'));
-        
+
         // Enfileira estilos no frontend
         add_action('wp_enqueue_scripts', array($this, 'enfileirar_estilos_frontend'));
-        
+
         // AJAX para salvar dados
         add_action('wp_ajax_gpp_salvar_cidade', array($this, 'ajax_salvar_cidade'));
         add_action('wp_ajax_gpp_excluir_cidade', array($this, 'ajax_excluir_cidade'));
         add_action('wp_ajax_gpp_buscar_cidade', array($this, 'ajax_buscar_cidade'));
         add_action('wp_ajax_gpp_aplicar_desconto_global', array($this, 'ajax_aplicar_desconto_global'));
         add_action('wp_ajax_gpp_remover_todos_descontos', array($this, 'ajax_remover_todos_descontos'));
-        
+
         // Adiciona submenu de variáveis
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
 
@@ -49,20 +46,36 @@ class Gerenciador_Precos_Planos {
         // AJAX para salvar valores regionais
         add_action('wp_ajax_gpp_salvar_valores_regionais', array($this, 'ajax_salvar_valores_regionais'));
 
-        // Registra shortcodes de valores regionais
-        add_action('init', array($this, 'registrar_shortcodes_regionais'));
-        
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
-        
-        // Processa shortcodes em títulos de posts/páginas
-        add_filter('the_title', 'do_shortcode', 11);
-        add_filter('single_post_title', 'do_shortcode', 11);
-        add_filter('wp_title', 'do_shortcode', 11);
+        // IMPORTANTE: Só adiciona filtros se NÃO estiver em contexto problemático
+        add_action('init', array($this, 'registrar_filtros_shortcode'), 5);
+    }
+
+    /**
+     * Registra filtros de shortcode apenas em contextos seguros
+     */
+    public function registrar_filtros_shortcode() {
+        // NÃO adiciona filtros em contextos problemáticos
+        if ($this->should_skip_shortcode_registration()) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: Pulando registro de FILTROS (contexto não seguro)');
+            }
+            return;
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: Registrando filtros de shortcode');
+        }
+
+        // Processa shortcodes em títulos de posts/páginas (com proteção para Elementor)
+        add_filter('the_title', array($this, 'processar_shortcode_title_seguro'), 11, 2);
+        add_filter('single_post_title', array($this, 'processar_shortcode_title_unico'), 11);
+        add_filter('wp_title', array($this, 'processar_shortcode_wp_title'), 11);
         add_filter('document_title_parts', array($this, 'processar_shortcode_title_parts'), 11);
-        
+
         // Processa shortcodes em widgets de título
         add_filter('widget_title', 'do_shortcode', 11);
-        
+
         // === YOAST SEO ===
         add_filter('wpseo_title', 'do_shortcode', 11);
         add_filter('wpseo_metadesc', 'do_shortcode', 11);
@@ -70,7 +83,7 @@ class Gerenciador_Precos_Planos {
         add_filter('wpseo_opengraph_desc', 'do_shortcode', 11);
         add_filter('wpseo_twitter_title', 'do_shortcode', 11);
         add_filter('wpseo_twitter_description', 'do_shortcode', 11);
-        
+
         // === RANK MATH SEO ===
         add_filter('rank_math/frontend/title', 'do_shortcode', 11);
         add_filter('rank_math/frontend/description', 'do_shortcode', 11);
@@ -78,12 +91,12 @@ class Gerenciador_Precos_Planos {
         add_filter('rank_math/opengraph/facebook/description', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/title', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/description', 'do_shortcode', 11);
-        
+
         // === ALL IN ONE SEO ===
         add_filter('aioseop_title', 'do_shortcode', 11);
         add_filter('aioseop_description', 'do_shortcode', 11);
         add_filter('aioseop_title_page', 'do_shortcode', 11);
-        
+
         // === SEOPress ===
         add_filter('seopress_titles_title', 'do_shortcode', 11);
         add_filter('seopress_titles_desc', 'do_shortcode', 11);
@@ -91,54 +104,244 @@ class Gerenciador_Precos_Planos {
         add_filter('seopress_social_og_desc', 'do_shortcode', 11);
         add_filter('seopress_social_twitter_title', 'do_shortcode', 11);
         add_filter('seopress_social_twitter_desc', 'do_shortcode', 11);
-        
+
         // === The SEO Framework ===
         add_filter('the_seo_framework_title_from_custom_field', 'do_shortcode', 11);
         add_filter('the_seo_framework_description_from_custom_field', 'do_shortcode', 11);
         add_filter('the_seo_framework_generated_description', 'do_shortcode', 11);
-        
+
         // Processa shortcodes em custom fields (ACF e outros)
         add_filter('acf/load_value', array($this, 'processar_shortcode_acf'), 11, 3);
         add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
+    }
+
+    /**
+     * Registra shortcodes apenas quando necessário (não em requisições Elementor)
+     */
+    public function registrar_shortcodes_com_protecao() {
+        // NÃO registra shortcodes em contextos problemáticos
+        if ($this->should_skip_shortcode_registration()) {
+            return;
+        }
+
+        // DEBUG: Aumenta limite de memória se necessário
+        $current_limit = ini_get('memory_limit');
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: Limite de memória atual: ' . $current_limit);
+        }
+
+        // Registra shortcodes de tabela, variáveis E regionais (com proteção)
+        $this->registrar_shortcodes();
+        $this->registrar_shortcodes_variaveis();
+        $this->registrar_shortcodes_regionais();
+
+        // DEBUG: Log após registro
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $cidades = $this->obter_todas_cidades();
+            error_log('GPP: Shortcodes registrados para ' . count($cidades) . ' cidades');
+            error_log('GPP: Variáveis limitadas a faixas 0, 1 e 9 (primeira, segunda e última)');
+            error_log('GPP: Shortcodes regionais: 12 (2 regiões × 6 campos)');
+            error_log('GPP: Memória usada: ' . size_format(memory_get_usage(true)));
+        }
+    }
+
+    /**
+     * Verifica se deve pular o registro de shortcodes
+     */
+    private function should_skip_shortcode_registration() {
+        // DEBUG: Log completo do contexto
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $url = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'unknown';
+            $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : 'none';
+
+            error_log('GPP DEBUG: Verificando contexto');
+            error_log('  - URL: ' . $url);
+            error_log('  - is_admin(): ' . (is_admin() ? 'TRUE' : 'false'));
+            error_log('  - DOING_AJAX: ' . (defined('DOING_AJAX') && DOING_AJAX ? 'TRUE' : 'false'));
+            error_log('  - Referer: ' . $referer);
+        }
+
+        // PROTEÇÃO AGRESSIVA: Pula no admin completamente (inclusive no próprio plugin)
+        // Shortcodes não são necessários no admin
+        if (is_admin()) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - is_admin() = true');
+            }
+            return true;
+        }
+
+        // Pula em QUALQUER requisição AJAX
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - DOING_AJAX = true');
+            }
+            return true;
+        }
+
+        // Pula no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library']) || isset($_GET['elementor-preview-mode'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - Elementor GET param');
+            }
+            return true;
+        }
+
+        // Pula se detectar Elementor no User-Agent ou Referer
+        if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'elementor') !== false) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - Elementor no referer');
+            }
+            return true;
+        }
+
+        // Pula em requisições REST API
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('GPP: ✓ PULANDO - REST_REQUEST');
+            }
+            return true;
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GPP: ✗ NÃO PULOU - Vai registrar filtros/shortcodes');
+        }
+
+        return false;
+    }
+
+    /**
+     * Verifica se estamos no contexto do Elementor que não deve processar shortcodes
+     */
+    private function is_elementor_context() {
+        // Não processa no editor do Elementor
+        if (isset($_GET['elementor-preview']) || isset($_GET['elementor_library'])) {
+            return true;
+        }
+
+        // Não processa em requisições AJAX do Elementor
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            if (isset($_REQUEST['action']) && strpos($_REQUEST['action'], 'elementor') !== false) {
+                return true;
+            }
+        }
+
+        // Não processa no admin (exceto frontend)
+        if (is_admin() && !wp_doing_ajax()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Processa shortcodes em títulos de forma segura (com proteção Elementor)
+     */
+    public function processar_shortcode_title_seguro($title, $id = null) {
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        // Não processa títulos vazios
+        if (empty($title) || !is_string($title)) {
+            return $title;
+        }
+
+        // Só processa se realmente houver shortcodes no título
+        if (strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
+    }
+
+    /**
+     * Processa shortcodes em título único
+     */
+    public function processar_shortcode_title_unico($title) {
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        if (empty($title) || !is_string($title) || strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
+    }
+
+    /**
+     * Processa shortcodes em wp_title
+     */
+    public function processar_shortcode_wp_title($title) {
+        if ($this->is_elementor_context()) {
+            return $title;
+        }
+
+        if (empty($title) || !is_string($title) || strpos($title, '[') === false) {
+            return $title;
+        }
+
+        return do_shortcode($title);
     }
     
     /**
      * Processa shortcodes nas partes do título do documento
      */
     public function processar_shortcode_title_parts($title_parts) {
-        if (isset($title_parts['title'])) {
+        if ($this->is_elementor_context()) {
+            return $title_parts;
+        }
+
+        if (isset($title_parts['title']) && is_string($title_parts['title'])) {
             $title_parts['title'] = do_shortcode($title_parts['title']);
         }
-        if (isset($title_parts['tagline'])) {
+        if (isset($title_parts['tagline']) && is_string($title_parts['tagline'])) {
             $title_parts['tagline'] = do_shortcode($title_parts['tagline']);
         }
-        if (isset($title_parts['site'])) {
+        if (isset($title_parts['site']) && is_string($title_parts['site'])) {
             $title_parts['site'] = do_shortcode($title_parts['site']);
         }
         return $title_parts;
     }
-    
+
     /**
      * Processa shortcodes em campos ACF
      */
     public function processar_shortcode_acf($value, $post_id, $field) {
-        if (is_string($value)) {
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $value;
+        }
+
+        // Só processa strings que contenham shortcodes
+        if (is_string($value) && strpos($value, '[') !== false) {
             return do_shortcode($value);
         }
         return $value;
     }
-    
+
     /**
      * Processa shortcodes em custom fields/meta fields
      */
     public function processar_shortcode_meta($value, $object_id, $meta_key, $single) {
         // Evita recursão infinita
         static $processing = false;
-        
+
         if ($processing) {
             return $value;
         }
-        
+
+        // Não processa no contexto do Elementor
+        if ($this->is_elementor_context()) {
+            return $value;
+        }
+
+        // IMPORTANTE: Ignora metadados do Elementor para evitar conflitos
+        if (strpos($meta_key, '_elementor') === 0 || strpos($meta_key, 'elementor') !== false) {
+            return $value;
+        }
+
         // Lista de meta keys comuns de SEO que devem ter shortcodes processados
         $seo_meta_keys = array(
             '_yoast_wpseo_title',
@@ -150,23 +353,24 @@ class Gerenciador_Precos_Planos {
             '_seopress_titles_title',
             '_seopress_titles_desc',
         );
-        
+
         if (in_array($meta_key, $seo_meta_keys)) {
             $processing = true;
-            
+
             // Obtém o valor real do meta
             remove_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11);
             $real_value = get_metadata('post', $object_id, $meta_key, $single);
             add_filter('get_post_metadata', array($this, 'processar_shortcode_meta'), 11, 4);
-            
-            if (is_string($real_value) && !empty($real_value)) {
+
+            // Só processa se for string e tiver shortcodes
+            if (is_string($real_value) && !empty($real_value) && strpos($real_value, '[') !== false) {
                 $real_value = do_shortcode($real_value);
             }
-            
+
             $processing = false;
             return $real_value;
         }
-        
+
         return $value;
     }
     
@@ -1006,11 +1210,14 @@ public function pagina_variaveis() {
      */
     public function registrar_shortcodes_variaveis() {
         $cidades = $this->obter_todas_cidades();
-        
+        $plugin_instance = $this;
+
         if (!empty($cidades)) {
             foreach ($cidades as $cidade_data) {
-                $shortcode_base = $cidade_data['shortcode'];
-                
+                // Cria cópia local para evitar problemas de referência em closures
+                $cidade_local = $cidade_data;
+                $shortcode_base = $cidade_local['shortcode'];
+
                 // Define os tipos de planos
                 $tipos_plano = array(
                     'empresarial' => 'emp',
@@ -1018,62 +1225,90 @@ public function pagina_variaveis() {
                     'pme' => 'pme',
                     'adesao' => 'ade'
                 );
-                
+
                 // Define as acomodações
                 $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
-                
+
                 foreach ($tipos_plano as $tipo_key => $tipo_sigla) {
                     // Verifica se este tipo de plano está ativo
-                    if (!isset($cidade_data['tipos_planos_ativos'][$tipo_key]) || !$cidade_data['tipos_planos_ativos'][$tipo_key]) {
+                    if (!isset($cidade_local['tipos_planos_ativos'][$tipo_key]) || !$cidade_local['tipos_planos_ativos'][$tipo_key]) {
                         continue;
                     }
-                    
+
+                    // Cria variáveis locais para este tipo
+                    $tipo_key_local = $tipo_key;
+                    $tipo_sigla_local = $tipo_sigla;
+
                     foreach ($acomodacoes as $acom) {
                         // Verifica se esta acomodação está ativa
-                        $campo_ativo_acom = $tipo_key . '_' . $acom . '_ativo';
-                        if (!isset($cidade_data[$campo_ativo_acom]) || !$cidade_data[$campo_ativo_acom]) {
+                        $campo_ativo_acom = $tipo_key_local . '_' . $acom . '_ativo';
+                        if (!isset($cidade_local[$campo_ativo_acom]) || !$cidade_local[$campo_ativo_acom]) {
                             continue;
                         }
-                        
+
+                        $acom_local = $acom;
+
                         // Total
-                        $campo_total = $tipo_key . '_' . $acom . '_total';
-                        if (!empty($cidade_data[$campo_total])) {
-                            // Shortcodes para cada faixa etária
-                            foreach ($cidade_data[$campo_total] as $index => $plano) {
-                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total_' . $index;
-                                
-                                add_shortcode($shortcode_name, function() use ($cidade_data, $plano, $tipo_key) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+                        $campo_total = $tipo_key_local . '_' . $acom_local . '_total';
+                        if (!empty($cidade_local[$campo_total])) {
+                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
+                            // Evita sobrecarga com 10 faixas × múltiplas cidades
+                            foreach ($cidade_local[$campo_total] as $index => $plano) {
+                                // Registra apenas índices 0, 1 e 9
+                                if ($index !== 0 && $index !== 1 && $index !== 9) {
+                                    continue;
+                                }
+
+                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'total_' . $index;
+
+                                // Cria variáveis locais para a closure
+                                $plano_local = $plano;
+
+                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_local, $plano_local, $tipo_key_local) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $plano_local['valor'], $tipo_key_local);
                                 });
                             }
-                            
+
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
-                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'total';
-                            add_shortcode($shortcode_first, function() use ($cidade_data, $campo_total, $tipo_key) {
-                                if (!empty($cidade_data[$campo_total][0]['valor'])) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_total][0]['valor'], $tipo_key);
+                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'total';
+                            $campo_total_local = $campo_total;
+
+                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_local, $campo_total_local, $tipo_key_local) {
+                                if (!empty($cidade_local[$campo_total_local][0]['valor'])) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $cidade_local[$campo_total_local][0]['valor'], $tipo_key_local);
                                 }
                                 return 'N/A';
                             });
                         }
-                        
+
                         // Parcial
-                        $campo_parcial = $tipo_key . '_' . $acom . '_parcial';
-                        if (!empty($cidade_data[$campo_parcial])) {
-                            // Shortcodes para cada faixa etária
-                            foreach ($cidade_data[$campo_parcial] as $index => $plano) {
-                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial_' . $index;
-                                
-                                add_shortcode($shortcode_name, function() use ($cidade_data, $plano, $tipo_key) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $plano['valor'], $tipo_key);
+                        $campo_parcial = $tipo_key_local . '_' . $acom_local . '_parcial';
+                        if (!empty($cidade_local[$campo_parcial])) {
+                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
+                            // Evita sobrecarga com 10 faixas × múltiplas cidades
+                            foreach ($cidade_local[$campo_parcial] as $index => $plano) {
+                                // Registra apenas índices 0, 1 e 9
+                                if ($index !== 0 && $index !== 1 && $index !== 9) {
+                                    continue;
+                                }
+
+                                $shortcode_name = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'parcial_' . $index;
+
+                                // Cria variáveis locais para a closure
+                                $plano_local = $plano;
+
+                                add_shortcode($shortcode_name, function() use ($plugin_instance, $cidade_local, $plano_local, $tipo_key_local) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $plano_local['valor'], $tipo_key_local);
                                 });
                             }
-                            
+
                             // ✅ ATALHO: Shortcode sem índice para primeira faixa (0-18 anos)
-                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla . '_' . $acom . 'parcial';
-                            add_shortcode($shortcode_first, function() use ($cidade_data, $campo_parcial, $tipo_key) {
-                                if (!empty($cidade_data[$campo_parcial][0]['valor'])) {
-                                    return $this->obter_valor_formatado_simples($cidade_data, $cidade_data[$campo_parcial][0]['valor'], $tipo_key);
+                            $shortcode_first = $shortcode_base . '_' . $tipo_sigla_local . '_' . $acom_local . 'parcial';
+                            $campo_parcial_local = $campo_parcial;
+
+                            add_shortcode($shortcode_first, function() use ($plugin_instance, $cidade_local, $campo_parcial_local, $tipo_key_local) {
+                                if (!empty($cidade_local[$campo_parcial_local][0]['valor'])) {
+                                    return $plugin_instance->obter_valor_formatado_simples($cidade_local, $cidade_local[$campo_parcial_local][0]['valor'], $tipo_key_local);
                                 }
                                 return 'N/A';
                             });
