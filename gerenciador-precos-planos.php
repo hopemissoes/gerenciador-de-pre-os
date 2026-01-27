@@ -1356,20 +1356,43 @@ public function pagina_variaveis() {
                 });
             }
 
-            // Registra shortcode de tabela completa para cada região
+            // Registra shortcode de tabela completa (retrocompatibilidade - funciona como 'total')
             $shortcode_tabela = $regiao . '_tabela';
             $regiao_local = $regiao;
 
             add_shortcode($shortcode_tabela, function() use ($plugin_instance, $valores, $regiao_local, $campos) {
-                return $plugin_instance->renderizar_tabela_regional($valores, $regiao_local, $campos);
+                return $plugin_instance->renderizar_tabela_regional($valores, $regiao_local, $campos, 'total');
+            });
+
+            // Registra shortcode de tabela TOTAL (todos os valores)
+            $shortcode_tabela_total = $regiao . '_tabela_total';
+            $regiao_local_total = $regiao;
+
+            add_shortcode($shortcode_tabela_total, function() use ($plugin_instance, $valores, $regiao_local_total, $campos) {
+                return $plugin_instance->renderizar_tabela_regional($valores, $regiao_local_total, $campos, 'total');
+            });
+
+            // Registra shortcode de tabela PARCIAL (isento nos 4 primeiros, valores só nas terapias)
+            $shortcode_tabela_parcial = $regiao . '_tabela_parcial';
+            $regiao_local_parcial = $regiao;
+
+            add_shortcode($shortcode_tabela_parcial, function() use ($plugin_instance, $valores, $regiao_local_parcial, $campos) {
+                return $plugin_instance->renderizar_tabela_regional($valores, $regiao_local_parcial, $campos, 'parcial');
             });
         }
     }
 
     /**
      * Renderiza a tabela de valores regionais em HTML
+     * @param array $valores - Valores regionais salvos
+     * @param string $regiao - Nome da região (sp_bh ou demais_capitais)
+     * @param array $campos - Array de campos com labels
+     * @param string $modo - 'total' (todos os valores) ou 'parcial' (isento nos 4 primeiros)
      */
-    public function renderizar_tabela_regional($valores, $regiao, $campos) {
+    public function renderizar_tabela_regional($valores, $regiao, $campos, $modo = 'total') {
+        // Campos que são isentos na coparticipação parcial
+        $campos_isentos_parcial = array('consultas_eletivas', 'consultas_urgencia', 'exames_simples', 'exames_complexos');
+
         ob_start();
         ?>
         <div class="gpp-container-cidade">
@@ -1388,10 +1411,16 @@ public function pagina_variaveis() {
                                 <td>
                                     <span class="valor-destaque">
                                         <?php
-                                        if (isset($valores[$regiao][$campo_key]) && !empty($valores[$regiao][$campo_key])) {
-                                            echo esc_html($valores[$regiao][$campo_key]);
+                                        // Se modo parcial E campo está na lista de isentos, mostra "Isento"
+                                        if ($modo === 'parcial' && in_array($campo_key, $campos_isentos_parcial)) {
+                                            echo 'Isento';
                                         } else {
-                                            echo 'N/A';
+                                            // Senão, mostra o valor normal
+                                            if (isset($valores[$regiao][$campo_key]) && !empty($valores[$regiao][$campo_key])) {
+                                                echo esc_html($valores[$regiao][$campo_key]);
+                                            } else {
+                                                echo 'N/A';
+                                            }
                                         }
                                         ?>
                                     </span>
