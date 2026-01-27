@@ -1978,6 +1978,12 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             .tabela-precos-hapvida {
                 font-size: 14px;
             }
+            .tabela-precos-hapvida table th {
+                font-size: 19px !important;
+            }
+            .tabela-precos-hapvida table tbody tr td {
+                font-size: 17px !important;
+            }
             .tabela-precos-hapvida th,
             .tabela-precos-hapvida td {
                 padding: 10px 8px !important;
