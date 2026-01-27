@@ -15,6 +15,7 @@ class Gerenciador_Precos_Planos {
     
     private $option_name = 'gpp_cidades_planos';
     private $settings_option = 'gpp_settings';
+    private $regional_option = 'gpp_valores_regionais';
     
     public function __construct() {
         // Adiciona menu no admin
@@ -41,6 +42,15 @@ class Gerenciador_Precos_Planos {
         
         // Adiciona submenu de variáveis
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
+
+        // Adiciona submenu de valores regionais
+        add_action('admin_menu', array($this, 'adicionar_submenu_regionais'), 12);
+
+        // AJAX para salvar valores regionais
+        add_action('wp_ajax_gpp_salvar_valores_regionais', array($this, 'ajax_salvar_valores_regionais'));
+
+        // Registra shortcodes de valores regionais
+        add_action('init', array($this, 'registrar_shortcodes_regionais'));
         
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
         
@@ -173,7 +183,21 @@ class Gerenciador_Precos_Planos {
             array($this, 'pagina_variaveis')
         );
     }
-    
+
+    /**
+     * Adiciona submenu para valores regionais (SP/BH e Demais Capitais)
+     */
+    public function adicionar_submenu_regionais() {
+        add_submenu_page(
+            'gerenciador-precos-planos',
+            'Valores Regionais',
+            'Valores Regionais',
+            'manage_options',
+            'gpp-regionais',
+            array($this, 'pagina_valores_regionais')
+        );
+    }
+
     /**
      * Obtém desconto de um tipo específico com lógica de prioridade
      */
@@ -747,6 +771,181 @@ public function pagina_variaveis() {
 }
 
     /**
+     * Página de administração para valores regionais (SP/BH e Demais Capitais)
+     */
+    public function pagina_valores_regionais() {
+        $valores = get_option($this->regional_option, array());
+
+        // Estrutura padrão dos campos
+        $campos = array(
+            'consultas_eletivas' => 'Consultas eletivas',
+            'consultas_urgencia' => 'Consultas de urgência/emergência',
+            'exames_simples' => 'Exames simples (sangue, urina, etc.)',
+            'exames_complexos' => 'Exames complexos (ressonância, tomografia, etc.)',
+            'terapias_neurologicas' => 'Terapias neurológicas (fonoaudiologia, fisioterapia neurológica)',
+            'demais_terapias' => 'Demais terapias (fisioterapia convencional, psicologia, nutrição)'
+        );
+
+        // Regiões disponíveis
+        $regioes = array(
+            'sp_bh' => array(
+                'nome' => 'São Paulo e Belo Horizonte',
+                'cor' => '#0054b8',
+                'emoji' => '🏙️'
+            ),
+            'demais_capitais' => array(
+                'nome' => 'Demais Capitais',
+                'cor' => '#28a745',
+                'emoji' => '🌆'
+            )
+        );
+        ?>
+        <div class="wrap">
+            <h1>Valores Regionais - Procedimentos Médicos</h1>
+
+            <div style="background: #fff; padding: 20px; margin: 20px 0; border-left: 4px solid #0054b8;">
+                <h2 style="margin-top: 0;">Como usar</h2>
+                <p>Configure os valores de procedimentos médicos para cada região. Os shortcodes serão gerados automaticamente.</p>
+                <p><strong>Exemplo de uso:</strong> <code>[sp_bh_consultas_eletivas]</code> ou <code>[demais_capitais_exames_simples]</code></p>
+            </div>
+
+            <form id="gpp-form-regionais">
+                <?php foreach ($regioes as $regiao_key => $regiao_info): ?>
+                    <div style="background: #fff; padding: 20px; margin: 20px 0; border: 2px solid <?php echo $regiao_info['cor']; ?>; border-radius: 5px;">
+                        <h2 style="margin-top: 0; color: <?php echo $regiao_info['cor']; ?>;">
+                            <?php echo $regiao_info['emoji']; ?> <?php echo $regiao_info['nome']; ?>
+                        </h2>
+
+                        <table class="form-table">
+                            <?php foreach ($campos as $campo_key => $campo_label):
+                                $valor_atual = isset($valores[$regiao_key][$campo_key]) ? $valores[$regiao_key][$campo_key] : '';
+                                $shortcode = '[' . $regiao_key . '_' . $campo_key . ']';
+                            ?>
+                                <tr>
+                                    <th style="width: 40%;">
+                                        <label for="<?php echo $regiao_key; ?>_<?php echo $campo_key; ?>"><?php echo $campo_label; ?></label>
+                                        <br>
+                                        <code style="font-size: 11px; background: #f0f0f0; padding: 2px 6px;"><?php echo $shortcode; ?></code>
+                                        <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="<?php echo esc_attr($shortcode); ?>" style="margin-left: 5px;">📋</button>
+                                    </th>
+                                    <td>
+                                        <input type="text"
+                                            id="<?php echo $regiao_key; ?>_<?php echo $campo_key; ?>"
+                                            name="valores[<?php echo $regiao_key; ?>][<?php echo $campo_key; ?>]"
+                                            value="<?php echo esc_attr($valor_atual); ?>"
+                                            class="regular-text"
+                                            placeholder="Ex: R$ 150,00 ou 150.00">
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </table>
+                    </div>
+                <?php endforeach; ?>
+
+                <p class="submit">
+                    <button type="submit" class="button button-primary button-large">Salvar Valores Regionais</button>
+                </p>
+            </form>
+
+            <!-- Tabela de referência dos shortcodes -->
+            <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ddd;">
+                <h2 style="margin-top: 0;">📋 Referência Rápida de Shortcodes</h2>
+
+                <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
+                    <thead>
+                        <tr style="background: #0054b8; color: #fff;">
+                            <th style="color: #fff; font-weight: bold;">Procedimento</th>
+                            <th style="color: #fff; font-weight: bold;">🏙️ SP e BH</th>
+                            <th style="color: #fff; font-weight: bold;">🌆 Demais Capitais</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($campos as $campo_key => $campo_label): ?>
+                            <tr>
+                                <td><strong><?php echo $campo_label; ?></strong></td>
+                                <td>
+                                    <code>[sp_bh_<?php echo $campo_key; ?>]</code>
+                                    <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[sp_bh_<?php echo $campo_key; ?>]">📋</button>
+                                    <?php if (isset($valores['sp_bh'][$campo_key]) && !empty($valores['sp_bh'][$campo_key])): ?>
+                                        <br><small style="color: #0054b8; font-weight: bold;"><?php echo esc_html($valores['sp_bh'][$campo_key]); ?></small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <code>[demais_capitais_<?php echo $campo_key; ?>]</code>
+                                    <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[demais_capitais_<?php echo $campo_key; ?>]">📋</button>
+                                    <?php if (isset($valores['demais_capitais'][$campo_key]) && !empty($valores['demais_capitais'][$campo_key])): ?>
+                                        <br><small style="color: #28a745; font-weight: bold;"><?php echo esc_html($valores['demais_capitais'][$campo_key]); ?></small>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Copiar shortcode
+            $('.gpp-copiar-shortcode').on('click', function() {
+                var shortcode = $(this).data('shortcode');
+                var $btn = $(this);
+                var textoOriginal = $btn.html();
+
+                navigator.clipboard.writeText(shortcode).then(function() {
+                    $btn.html('✅');
+                    setTimeout(function() {
+                        $btn.html(textoOriginal);
+                    }, 2000);
+                });
+            });
+
+            // Salvar valores via AJAX
+            $('#gpp-form-regionais').on('submit', function(e) {
+                e.preventDefault();
+
+                var formData = $(this).serializeArray();
+                var valores = {};
+
+                formData.forEach(function(item) {
+                    var match = item.name.match(/valores\[(\w+)\]\[(\w+)\]/);
+                    if (match) {
+                        var regiao = match[1];
+                        var campo = match[2];
+                        if (!valores[regiao]) {
+                            valores[regiao] = {};
+                        }
+                        valores[regiao][campo] = item.value;
+                    }
+                });
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'gpp_salvar_valores_regionais',
+                        nonce: '<?php echo wp_create_nonce('gpp_nonce'); ?>',
+                        valores: JSON.stringify(valores)
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Valores salvos com sucesso!');
+                            location.reload();
+                        } else {
+                            alert('Erro ao salvar: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('Erro de conexão ao salvar.');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    /**
      * Obtém valor formatado simples (com desconto se houver)
      */
     private function obter_valor_formatado_simples($cidade_data, $valor, $tipo_plano) {
@@ -884,7 +1083,40 @@ public function pagina_variaveis() {
             }
         }
     }
-    
+
+    /**
+     * Registra shortcodes de valores regionais (SP/BH e Demais Capitais)
+     */
+    public function registrar_shortcodes_regionais() {
+        $valores = get_option($this->regional_option, array());
+
+        // Campos disponíveis
+        $campos = array(
+            'consultas_eletivas',
+            'consultas_urgencia',
+            'exames_simples',
+            'exames_complexos',
+            'terapias_neurologicas',
+            'demais_terapias'
+        );
+
+        // Regiões disponíveis
+        $regioes = array('sp_bh', 'demais_capitais');
+
+        foreach ($regioes as $regiao) {
+            foreach ($campos as $campo) {
+                $shortcode_name = $regiao . '_' . $campo;
+
+                add_shortcode($shortcode_name, function() use ($valores, $regiao, $campo) {
+                    if (isset($valores[$regiao][$campo]) && !empty($valores[$regiao][$campo])) {
+                        return esc_html($valores[$regiao][$campo]);
+                    }
+                    return 'N/A';
+                });
+            }
+        }
+    }
+
     /**
      * ===== NOVA FUNCIONALIDADE =====
      * Registra variáveis dinâmicas no RankMath
@@ -2710,6 +2942,50 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * AJAX - Salvar valores regionais (SP/BH e Demais Capitais)
+     */
+    public function ajax_salvar_valores_regionais() {
+        check_ajax_referer('gpp_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permissão negada');
+        }
+
+        $valores_json = isset($_POST['valores']) ? stripslashes($_POST['valores']) : '';
+        $valores = json_decode($valores_json, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            wp_send_json_error('Erro ao processar os dados');
+        }
+
+        // Sanitiza os valores
+        $valores_sanitizados = array();
+        $regioes_permitidas = array('sp_bh', 'demais_capitais');
+        $campos_permitidos = array(
+            'consultas_eletivas',
+            'consultas_urgencia',
+            'exames_simples',
+            'exames_complexos',
+            'terapias_neurologicas',
+            'demais_terapias'
+        );
+
+        foreach ($regioes_permitidas as $regiao) {
+            if (isset($valores[$regiao]) && is_array($valores[$regiao])) {
+                $valores_sanitizados[$regiao] = array();
+                foreach ($campos_permitidos as $campo) {
+                    if (isset($valores[$regiao][$campo])) {
+                        $valores_sanitizados[$regiao][$campo] = sanitize_text_field($valores[$regiao][$campo]);
+                    }
+                }
+            }
+        }
+
+        update_option($this->regional_option, $valores_sanitizados);
+        wp_send_json_success('Valores regionais salvos com sucesso!');
     }
 }
 
