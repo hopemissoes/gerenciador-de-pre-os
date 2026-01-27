@@ -1010,7 +1010,29 @@ public function pagina_variaveis() {
             <div style="background: #fff; padding: 20px; margin: 20px 0; border-left: 4px solid #0054b8;">
                 <h2 style="margin-top: 0;">Como usar</h2>
                 <p>Configure os valores de procedimentos médicos para cada região. Os shortcodes serão gerados automaticamente.</p>
-                <p><strong>Exemplo de uso:</strong> <code>[sp_bh_consultas_eletivas]</code> ou <code>[demais_capitais_exames_simples]</code></p>
+
+                <h3>📌 Shortcodes Individuais</h3>
+                <p><strong>Exemplo:</strong> <code>[sp_bh_consultas_eletivas]</code> ou <code>[demais_capitais_exames_simples]</code></p>
+                <p>Exibe apenas o valor de um procedimento específico.</p>
+
+                <h3>📋 Shortcodes de Tabela Completa</h3>
+                <p><strong>Coparticipação TOTAL</strong> (todos os procedimentos com valores):</p>
+                <ul style="margin-left: 20px;">
+                    <li><code>[sp_bh_tabela_total]</code> - Tabela completa SP/BH</li>
+                    <li><code>[demais_capitais_tabela_total]</code> - Tabela completa demais capitais</li>
+                </ul>
+
+                <p><strong>Coparticipação PARCIAL</strong> (consultas/exames isentos, valores só em terapias):</p>
+                <ul style="margin-left: 20px;">
+                    <li><code>[sp_bh_tabela_parcial]</code> - Tabela parcial SP/BH</li>
+                    <li><code>[demais_capitais_tabela_parcial]</code> - Tabela parcial demais capitais</li>
+                </ul>
+
+                <p><strong>Atalhos sem sufixo</strong> (funcionam como _total):</p>
+                <ul style="margin-left: 20px;">
+                    <li><code>[sp_bh_tabela]</code> = <code>[sp_bh_tabela_total]</code></li>
+                    <li><code>[demais_capitais_tabela]</code> = <code>[demais_capitais_tabela_total]</code></li>
+                </ul>
             </div>
 
             <form id="gpp-form-regionais">
@@ -1083,6 +1105,52 @@ public function pagina_variaveis() {
                                 </td>
                             </tr>
                         <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <h3 style="margin-top: 30px;">📋 Shortcodes de Tabelas Completas</h3>
+                <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
+                    <thead>
+                        <tr style="background: #28a745; color: #fff;">
+                            <th style="color: #fff; font-weight: bold;">Tipo de Tabela</th>
+                            <th style="color: #fff; font-weight: bold;">🏙️ SP e BH</th>
+                            <th style="color: #fff; font-weight: bold;">🌆 Demais Capitais</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Tabela TOTAL</strong><br><small>Todos os procedimentos com valores</small></td>
+                            <td>
+                                <code>[sp_bh_tabela_total]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[sp_bh_tabela_total]">📋</button>
+                            </td>
+                            <td>
+                                <code>[demais_capitais_tabela_total]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[demais_capitais_tabela_total]">📋</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tabela PARCIAL</strong><br><small>Consultas/exames isentos, valores apenas em terapias</small></td>
+                            <td>
+                                <code>[sp_bh_tabela_parcial]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[sp_bh_tabela_parcial]">📋</button>
+                            </td>
+                            <td>
+                                <code>[demais_capitais_tabela_parcial]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[demais_capitais_tabela_parcial]">📋</button>
+                            </td>
+                        </tr>
+                        <tr style="background: #f0f0f0;">
+                            <td><strong>Atalho (sem sufixo)</strong><br><small>Funciona como _total</small></td>
+                            <td>
+                                <code>[sp_bh_tabela]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[sp_bh_tabela]">📋</button>
+                            </td>
+                            <td>
+                                <code>[demais_capitais_tabela]</code>
+                                <button type="button" class="button button-small gpp-copiar-shortcode" data-shortcode="[demais_capitais_tabela]">📋</button>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1350,7 +1418,12 @@ public function pagina_variaveis() {
 
                 add_shortcode($shortcode_name, function() use ($valores, $regiao_local, $campo_local) {
                     if (isset($valores[$regiao_local][$campo_local]) && !empty($valores[$regiao_local][$campo_local])) {
-                        return esc_html($valores[$regiao_local][$campo_local]);
+                        $valor = $valores[$regiao_local][$campo_local];
+                        // Adiciona R$ se o valor não começar com ele
+                        if (stripos($valor, 'R$') === false) {
+                            $valor = 'R$ ' . $valor;
+                        }
+                        return esc_html($valor);
                     }
                     return 'N/A';
                 });
@@ -1415,9 +1488,14 @@ public function pagina_variaveis() {
                                         if ($modo === 'parcial' && in_array($campo_key, $campos_isentos_parcial)) {
                                             echo 'Isento';
                                         } else {
-                                            // Senão, mostra o valor normal
+                                            // Senão, mostra o valor normal com R$
                                             if (isset($valores[$regiao][$campo_key]) && !empty($valores[$regiao][$campo_key])) {
-                                                echo esc_html($valores[$regiao][$campo_key]);
+                                                $valor = $valores[$regiao][$campo_key];
+                                                // Adiciona R$ se o valor não começar com ele
+                                                if (stripos($valor, 'R$') === false) {
+                                                    $valor = 'R$ ' . $valor;
+                                                }
+                                                echo esc_html($valor);
                                             } else {
                                                 echo 'N/A';
                                             }
