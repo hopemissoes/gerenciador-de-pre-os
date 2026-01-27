@@ -1965,7 +1965,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             color: #FFFFFF !important;
             background-color: #F05A22 !important;
             border-left: 5px solid #d64a1a !important;
-            border-radius: 4px !important;
+            border-radius: 20px !important;
         }
         
         .gpp-desconto-pequeno {
@@ -1989,7 +1989,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             color: #333333 !important;
             background-color: #fff3e0 !important;
             border-left: 5px solid #F05A22 !important;
-            border-radius: 4px !important;
+            border-radius: 20px !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
         
@@ -2001,7 +2001,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             font-weight: bold !important;
             text-decoration: none !important;
             padding: 15px 40px !important;
-            border-radius: 5px !important;
+            border-radius: 20px !important;
             margin: 10px 0 20px 0 !important;
             text-align: center !important;
             transition: all 0.3s ease !important;
