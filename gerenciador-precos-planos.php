@@ -1958,13 +1958,13 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         .gpp-desconto-info {
             text-align: center !important;
-            font-weight: 900 !important;
-            font-size: 20px !important;
-            margin: 20px 0 10px 0 !important;
-            padding: 15px !important;
-            color: #FFFFFF !important;
-            background-color: #F05A22 !important;
-            border-left: 5px solid #d64a1a !important;
+            font-weight: 600 !important;
+            font-size: 15px !important;
+            margin: 15px 0 10px 0 !important;
+            padding: 10px 15px !important;
+            color: #555555 !important;
+            background-color: #fff3e0 !important;
+            border-left: 3px solid #F05A22 !important;
             border-radius: 20px !important;
         }
         
@@ -2037,7 +2037,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 padding: 10px 8px !important;
             }
             .gpp-desconto-info {
-                font-size: 18px !important;
+                font-size: 14px !important;
             }
             .gpp-desconto-pequeno {
                 font-size: 14px !important;
