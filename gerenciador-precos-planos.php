@@ -1324,31 +1324,58 @@ public function pagina_variaveis() {
      */
     public function registrar_shortcodes_regionais() {
         $valores = get_option($this->regional_option, array());
+        $plugin_instance = $this;
 
-        // Campos disponíveis
+        // Campos disponíveis com labels formatados
         $campos = array(
-            'consultas_eletivas',
-            'consultas_urgencia',
-            'exames_simples',
-            'exames_complexos',
-            'terapias_neurologicas',
-            'demais_terapias'
+            'consultas_eletivas' => 'Consultas eletivas',
+            'consultas_urgencia' => 'Consultas de urgência/emergência',
+            'exames_simples' => 'Exames simples (sangue, urina, etc.)',
+            'exames_complexos' => 'Exames complexos (ressonância, tomografia, etc.)',
+            'terapias_neurologicas' => 'Terapias neurológicas (fonoaudiologia, fisioterapia neurológica)',
+            'demais_terapias' => 'Demais terapias (fisioterapia convencional, psicologia, nutrição)'
         );
 
         // Regiões disponíveis
         $regioes = array('sp_bh', 'demais_capitais');
 
+        // Registra shortcodes individuais para cada campo
         foreach ($regioes as $regiao) {
-            foreach ($campos as $campo) {
-                $shortcode_name = $regiao . '_' . $campo;
+            foreach ($campos as $campo_key => $campo_label) {
+                $shortcode_name = $regiao . '_' . $campo_key;
 
-                add_shortcode($shortcode_name, function() use ($valores, $regiao, $campo) {
-                    if (isset($valores[$regiao][$campo]) && !empty($valores[$regiao][$campo])) {
-                        return esc_html($valores[$regiao][$campo]);
+                // Cria variáveis locais para a closure
+                $regiao_local = $regiao;
+                $campo_local = $campo_key;
+
+                add_shortcode($shortcode_name, function() use ($valores, $regiao_local, $campo_local) {
+                    if (isset($valores[$regiao_local][$campo_local]) && !empty($valores[$regiao_local][$campo_local])) {
+                        return esc_html($valores[$regiao_local][$campo_local]);
                     }
                     return 'N/A';
                 });
             }
+
+            // Registra shortcode de tabela completa para cada região
+            $shortcode_tabela = $regiao . '_tabela';
+            $regiao_local = $regiao;
+
+            add_shortcode($shortcode_tabela, function() use ($valores, $regiao_local, $campos) {
+                $output = '';
+
+                foreach ($campos as $campo_key => $campo_label) {
+                    $valor = 'N/A';
+
+                    if (isset($valores[$regiao_local][$campo_key]) && !empty($valores[$regiao_local][$campo_key])) {
+                        $valor = esc_html($valores[$regiao_local][$campo_key]);
+                    }
+
+                    $output .= $campo_label . ': ' . $valor . "\n";
+                }
+
+                // Remove a última quebra de linha
+                return rtrim($output);
+            });
         }
     }
 
