@@ -74,9 +74,6 @@ class Gerenciador_Precos_Planos {
         add_filter('rank_math/opengraph/twitter/title', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/description', 'do_shortcode', 11);
 
-        // === RANK MATH SCHEMA (JSON-LD) ===
-        add_filter('rank_math/json_ld', array($this, 'processar_shortcodes_schema_rankmath'), 99, 2);
-        
         // === ALL IN ONE SEO ===
         add_filter('aioseop_title', 'do_shortcode', 11);
         add_filter('aioseop_description', 'do_shortcode', 11);
@@ -287,7 +284,68 @@ class Gerenciador_Precos_Planos {
             'valor' => $menor_valor_display
         );
     }
-    
+
+    /**
+     * Encontra o menor valor de uma cidade filtrando por tipo de coparticipação
+     * @param string $filtro_copart 'total' ou 'parcial'
+     */
+    private function encontrar_menor_valor_cidade_por_coparticipacao($cidade, $filtro_copart) {
+        $menor_valor = null;
+        $menor_shortcode = null;
+        $menor_valor_display = null;
+
+        $tipos_plano = array(
+            'empresarial' => 'emp',
+            'individual' => 'ind',
+            'pme' => 'pme',
+            'adesao' => 'ade'
+        );
+
+        $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
+
+        foreach ($tipos_plano as $tipo_key => $tipo_sigla) {
+            if (!isset($cidade['tipos_planos_ativos'][$tipo_key]) || !$cidade['tipos_planos_ativos'][$tipo_key]) {
+                continue;
+            }
+
+            foreach ($acomodacoes as $acom) {
+                $campo_ativo = $tipo_key . '_' . $acom . '_ativo';
+                if (!isset($cidade[$campo_ativo]) || !$cidade[$campo_ativo]) {
+                    continue;
+                }
+
+                $campo = $tipo_key . '_' . $acom . '_' . $filtro_copart;
+
+                if (isset($cidade[$campo]) && !empty($cidade[$campo])) {
+                    if (isset($cidade[$campo][0]['valor'])) {
+                        $valor_string = $cidade[$campo][0]['valor'];
+
+                        $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor_string);
+                        $preco_limpo = str_replace(',', '.', $preco_limpo);
+                        $preco_numerico = floatval($preco_limpo);
+
+                        $desconto = $this->obter_desconto_tipo($cidade, $tipo_key);
+                        if ($desconto > 0) {
+                            $multiplicador = 1 - ($desconto / 100);
+                            $preco_numerico = $preco_numerico * $multiplicador;
+                        }
+
+                        if ($menor_valor === null || $preco_numerico < $menor_valor) {
+                            $menor_valor = $preco_numerico;
+                            $menor_shortcode = $cidade['shortcode'] . '_' . $tipo_sigla . '_' . $acom . $filtro_copart;
+                            $menor_valor_display = $this->obter_valor_formatado_simples($cidade, $valor_string, $tipo_key);
+                        }
+                    }
+                }
+            }
+        }
+
+        return array(
+            'shortcode' => $menor_shortcode,
+            'valor' => $menor_valor_display
+        );
+    }
+
     /**
      * Página que lista todas as variáveis disponíveis
      */
@@ -935,28 +993,6 @@ public function pagina_variaveis() {
 
             $cidade_slug = $cidade['shortcode'];
 
-            // Variável universal: menor valor da cidade
-            $var_menor = $cidade_slug . '_menorvalor';
-            rank_math_register_var_replacement(
-                $var_menor,
-                array(
-                    'name'        => 'Menor Valor: ' . ucfirst($cidade_slug),
-                    'description' => 'Menor valor de plano de saúde em ' . ucfirst($cidade_slug) . ' (qualquer tipo)',
-                    'variable'    => $var_menor,
-                    'example'     => 'R$ 99,81',
-                ),
-                function() use ($cidade_slug) {
-                    $cidades = $this->obter_todas_cidades();
-                    foreach ($cidades as $c) {
-                        if (isset($c['shortcode']) && $c['shortcode'] === $cidade_slug) {
-                            $menor = $this->encontrar_menor_valor_cidade($c);
-                            return $menor['valor'] ? $menor['valor'] : 'N/A';
-                        }
-                    }
-                    return 'N/A';
-                }
-            );
-
             // Para cada combinação de tipo/acomodação/coparticipação
             foreach ($tipos as $tipo) {
                 // Verifica se este tipo está ativo
@@ -1094,6 +1130,38 @@ public function registrar_shortcodes() {
                 foreach ($cidades as $c) {
                     if ($c['shortcode'] === $shortcode_base) {
                         $menor = $this->encontrar_menor_valor_cidade($c);
+                        if ($menor['valor']) {
+                            return $menor['valor'];
+                        }
+                        return 'N/A';
+                    }
+                }
+                return 'N/A';
+            });
+
+            // SHORTCODE UNIVERSAL POR COPARTICIPAÇÃO: cidade_menorvalor_total
+            $shortcode_menor_total = $shortcode_base . '_menorvalor_total';
+            add_shortcode($shortcode_menor_total, function($atts) use ($shortcode_base) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base) {
+                        $menor = $this->encontrar_menor_valor_cidade_por_coparticipacao($c, 'total');
+                        if ($menor['valor']) {
+                            return $menor['valor'];
+                        }
+                        return 'N/A';
+                    }
+                }
+                return 'N/A';
+            });
+
+            // SHORTCODE UNIVERSAL POR COPARTICIPAÇÃO: cidade_menorvalor_parcial
+            $shortcode_menor_parcial = $shortcode_base . '_menorvalor_parcial';
+            add_shortcode($shortcode_menor_parcial, function($atts) use ($shortcode_base) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base) {
+                        $menor = $this->encontrar_menor_valor_cidade_por_coparticipacao($c, 'parcial');
                         if ($menor['valor']) {
                             return $menor['valor'];
                         }
@@ -1647,6 +1715,11 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                             <br>
                                             <strong style="color: #e65100; font-size: 10px;">🌐 UNIVERSAL:</strong>
                                             <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]" style="cursor: pointer; background: #ffe0b2; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ff9800;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
+                                            <br>
+                                            <span style="font-size: 9px; color: #666; margin-right: 3px;">Total:</span>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor_total]" style="cursor: pointer; background: #e3f2fd; padding: 2px 6px; margin: 2px 3px 2px 0; display: inline-block; border-radius: 3px; font-size: 10px; border: 1px solid #ff9800;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor_total]</code>
+                                            <span style="font-size: 9px; color: #666; margin: 0 3px;">Parcial:</span>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor_parcial]" style="cursor: pointer; background: #fff3e0; padding: 2px 6px; margin: 2px 3px 2px 0; display: inline-block; border-radius: 3px; font-size: 10px; border: 1px solid #ff9800;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor_parcial]</code>
                                         </div>
                                     <?php endif; ?>
                                     
@@ -2759,20 +2832,6 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
-    }
-
-    /**
-     * Processa shortcodes dentro do JSON-LD gerado pelo RankMath
-     */
-    public function processar_shortcodes_schema_rankmath($data, $jsonld) {
-        if (is_array($data)) {
-            array_walk_recursive($data, function(&$value) {
-                if (is_string($value) && (strpos($value, '[') !== false || strpos($value, '%') !== false)) {
-                    $value = do_shortcode($value);
-                }
-            });
-        }
-        return $data;
     }
 
     /**
