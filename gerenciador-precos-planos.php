@@ -41,6 +41,11 @@ class Gerenciador_Precos_Planos {
         
         // Adiciona submenu de variáveis
         add_action('admin_menu', array($this, 'adicionar_submenu_variaveis'), 11);
+
+        // Meta box para schema com shortcodes
+        add_action('add_meta_boxes', array($this, 'adicionar_meta_box_schema'));
+        add_action('save_post', array($this, 'salvar_meta_box_schema'));
+        add_action('wp_head', array($this, 'renderizar_schema_shortcodes'), 1);
         
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
         
@@ -924,9 +929,31 @@ public function pagina_variaveis() {
             if (!isset($cidade['shortcode']) || empty($cidade['shortcode'])) {
                 continue;
             }
-            
+
             $cidade_slug = $cidade['shortcode'];
-            
+
+            // Variável universal: menor valor da cidade
+            $var_menor = $cidade_slug . '_menorvalor';
+            rank_math_register_var_replacement(
+                $var_menor,
+                array(
+                    'name'        => 'Menor Valor: ' . ucfirst($cidade_slug),
+                    'description' => 'Menor valor de plano de saúde em ' . ucfirst($cidade_slug) . ' (qualquer tipo)',
+                    'variable'    => $var_menor,
+                    'example'     => 'R$ 99,81',
+                ),
+                function() use ($cidade_slug) {
+                    $cidades = $this->obter_todas_cidades();
+                    foreach ($cidades as $c) {
+                        if (isset($c['shortcode']) && $c['shortcode'] === $cidade_slug) {
+                            $menor = $this->encontrar_menor_valor_cidade($c);
+                            return $menor['valor'] ? $menor['valor'] : 'N/A';
+                        }
+                    }
+                    return 'N/A';
+                }
+            );
+
             // Para cada combinação de tipo/acomodação/coparticipação
             foreach ($tipos as $tipo) {
                 // Verifica se este tipo está ativo
@@ -1052,13 +1079,29 @@ public function pagina_variaveis() {
  */
 public function registrar_shortcodes() {
     $cidades = $this->obter_todas_cidades();
-    
+
     if (!empty($cidades)) {
         foreach ($cidades as $cidade_data) {
             $shortcode_base = $cidade_data['shortcode'];
-            
+
+            // SHORTCODE UNIVERSAL: cidade_menorvalor - retorna o menor valor independente do tipo de plano
+            $shortcode_menor = $shortcode_base . '_menorvalor';
+            add_shortcode($shortcode_menor, function($atts) use ($shortcode_base) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base) {
+                        $menor = $this->encontrar_menor_valor_cidade($c);
+                        if ($menor['valor']) {
+                            return $menor['valor'];
+                        }
+                        return 'N/A';
+                    }
+                }
+                return 'N/A';
+            });
+
             $tipos_plano = array('empresarial', 'individual', 'pme', 'adesao');
-            
+
             foreach ($tipos_plano as $tipo) {
                 // Verifica se este tipo está ativo
                 if (isset($cidade_data['tipos_planos_ativos'][$tipo]) && $cidade_data['tipos_planos_ativos'][$tipo]) {
@@ -1598,6 +1641,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                             <strong style="color: #f57c00; font-size: 10px;">💰 MENOR VALOR:</strong><br>
                                             <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($menor['shortcode']); ?>]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($menor['shortcode']); ?>]</code>
                                             <small style="color: #f57c00; font-weight: bold;"><?php echo esc_html($menor['valor']); ?></small>
+                                            <br>
+                                            <strong style="color: #e65100; font-size: 10px;">🌐 UNIVERSAL:</strong>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]" style="cursor: pointer; background: #ffe0b2; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ff9800;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
                                         </div>
                                     <?php endif; ?>
                                     
@@ -2710,6 +2756,101 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * Adiciona meta box de Schema com Shortcodes em posts e páginas
+     */
+    public function adicionar_meta_box_schema() {
+        $post_types = get_post_types(array('public' => true), 'names');
+        foreach ($post_types as $post_type) {
+            add_meta_box(
+                'gpp_schema_shortcodes',
+                '📋 Schema com Shortcodes (Gerenciador de Preços)',
+                array($this, 'renderizar_meta_box_schema'),
+                $post_type,
+                'normal',
+                'low'
+            );
+        }
+    }
+
+    /**
+     * Renderiza o conteúdo da meta box de schema
+     */
+    public function renderizar_meta_box_schema($post) {
+        wp_nonce_field('gpp_schema_nonce_action', 'gpp_schema_nonce');
+        $schema_content = get_post_meta($post->ID, '_gpp_schema_shortcodes', true);
+        ?>
+        <div style="margin-bottom: 10px;">
+            <p style="color: #666;">
+                Cole aqui o script de Schema (JSON-LD) com os shortcodes de preços e coparticipação.
+                Os shortcodes serão processados automaticamente ao exibir no front-end.<br>
+                <strong>Exemplo:</strong> Use <code>[fortaleza_menorvalor]</code>, <code>[fortaleza_emp_ambulatorialtotal_0]</code>, etc.
+            </p>
+        </div>
+        <textarea
+            id="gpp_schema_shortcodes"
+            name="gpp_schema_shortcodes"
+            rows="12"
+            style="width: 100%; font-family: monospace; font-size: 13px;"
+            placeholder='<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Plano de Saúde",
+  "offers": {
+    "@type": "Offer",
+    "price": "[fortaleza_menorvalor]",
+    "priceCurrency": "BRL"
+  }
+}
+</script>'
+        ><?php echo esc_textarea($schema_content); ?></textarea>
+        <p style="color: #999; font-size: 12px; margin-top: 5px;">
+            Inclua a tag <code>&lt;script type="application/ld+json"&gt;</code> completa. Os shortcodes dentro do script serão substituídos pelos valores reais.
+        </p>
+        <?php
+    }
+
+    /**
+     * Salva o conteúdo da meta box de schema
+     */
+    public function salvar_meta_box_schema($post_id) {
+        if (!isset($_POST['gpp_schema_nonce']) || !wp_verify_nonce($_POST['gpp_schema_nonce'], 'gpp_schema_nonce_action')) {
+            return;
+        }
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        if (isset($_POST['gpp_schema_shortcodes'])) {
+            $schema_content = wp_unslash($_POST['gpp_schema_shortcodes']);
+            update_post_meta($post_id, '_gpp_schema_shortcodes', $schema_content);
+        }
+    }
+
+    /**
+     * Renderiza o schema com shortcodes processados no wp_head
+     */
+    public function renderizar_schema_shortcodes() {
+        if (!is_singular()) {
+            return;
+        }
+        $post_id = get_the_ID();
+        if (!$post_id) {
+            return;
+        }
+        $schema_content = get_post_meta($post_id, '_gpp_schema_shortcodes', true);
+        if (empty($schema_content)) {
+            return;
+        }
+        // Processa os shortcodes dentro do conteúdo do schema
+        $schema_processado = do_shortcode($schema_content);
+        // Exibe o schema processado diretamente (já contém as tags script)
+        echo "\n" . $schema_processado . "\n";
     }
 }
 
