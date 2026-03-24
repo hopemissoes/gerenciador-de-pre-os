@@ -50,7 +50,11 @@ class Gerenciador_Precos_Planos {
         // IMPORTANTE: Só adiciona filtros se NÃO estiver em contexto problemático
         add_action('init', array($this, 'registrar_filtros_shortcode'), 5);
 
-        // ===== SCHEMA/STRUCTURED DATA: Textarea para scripts com shortcodes =====
+        // ===== SCHEMA/STRUCTURED DATA =====
+        // Processa shortcodes dentro dos schemas do RankMath
+        add_filter('rank_math/json_ld', array($this, 'processar_shortcodes_schema_rankmath'), 99, 2);
+
+        // Textarea extra para schema customizado (opcional)
         add_action('add_meta_boxes', array($this, 'adicionar_metabox_schema'));
         add_action('save_post', array($this, 'salvar_metabox_schema'));
         add_action('wp_footer', array($this, 'renderizar_schema_frontend'), 99);
@@ -1681,6 +1685,29 @@ public function pagina_variaveis() {
     }
     
     // ===== SCHEMA/STRUCTURED DATA =====
+
+    /**
+     * Processa shortcodes dentro dos schemas do RankMath
+     * Intercepta o JSON-LD antes de ser renderizado e substitui shortcodes pelos valores reais
+     */
+    public function processar_shortcodes_schema_rankmath($data, $jsonld) {
+        // Percorre recursivamente todos os valores do schema
+        return $this->processar_shortcodes_recursivo($data);
+    }
+
+    /**
+     * Percorre recursivamente um array e processa shortcodes em strings
+     */
+    private function processar_shortcodes_recursivo($data) {
+        if (is_array($data)) {
+            foreach ($data as $key => $value) {
+                $data[$key] = $this->processar_shortcodes_recursivo($value);
+            }
+        } elseif (is_string($data) && strpos($data, '[') !== false) {
+            $data = do_shortcode($data);
+        }
+        return $data;
+    }
 
     /**
      * Adiciona meta box com textarea para schema em posts e páginas
