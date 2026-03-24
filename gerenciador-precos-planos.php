@@ -49,6 +49,11 @@ class Gerenciador_Precos_Planos {
         // ===== FILTROS PARA PROCESSAR SHORTCODES EM TÍTULOS E META TAGS =====
         // IMPORTANTE: Só adiciona filtros se NÃO estiver em contexto problemático
         add_action('init', array($this, 'registrar_filtros_shortcode'), 5);
+
+        // ===== SCHEMA/STRUCTURED DATA: Textarea para scripts com shortcodes =====
+        add_action('add_meta_boxes', array($this, 'adicionar_metabox_schema'));
+        add_action('save_post', array($this, 'salvar_metabox_schema'));
+        add_action('wp_footer', array($this, 'renderizar_schema_frontend'), 99);
     }
 
     /**
@@ -1675,6 +1680,123 @@ public function pagina_variaveis() {
         );
     }
     
+    // ===== SCHEMA/STRUCTURED DATA =====
+
+    /**
+     * Adiciona meta box com textarea para schema em posts e páginas
+     */
+    public function adicionar_metabox_schema() {
+        $post_types = array('post', 'page');
+        foreach ($post_types as $post_type) {
+            add_meta_box(
+                'gpp_schema_markup',
+                'Schema Markup (Structured Data)',
+                array($this, 'renderizar_metabox_schema'),
+                $post_type,
+                'normal',
+                'low'
+            );
+        }
+    }
+
+    /**
+     * Renderiza o conteúdo da meta box de schema
+     */
+    public function renderizar_metabox_schema($post) {
+        $schema_content = get_post_meta($post->ID, '_gpp_schema_markup', true);
+        wp_nonce_field('gpp_schema_nonce_action', 'gpp_schema_nonce');
+        ?>
+        <div style="margin-bottom: 10px;">
+            <p style="margin-bottom: 10px;">
+                <strong>Cole aqui o script de Schema (JSON-LD) com shortcodes de preços e coparticipação.</strong><br>
+                Os shortcodes serão processados automaticamente no frontend.
+            </p>
+            <p style="color: #666; font-size: 12px; margin-bottom: 10px;">
+                <strong>Exemplos de shortcodes disponíveis:</strong><br>
+                Preços: <code>[fortaleza_menorvalor]</code> <code>[fortaleza_ind_ambulatorialtotal_0]</code><br>
+                Coparticipação: <code>[sp_bh_consultas_eletivas]</code> <code>[demais_capitais_exames_simples]</code>
+            </p>
+            <textarea
+                id="gpp_schema_markup"
+                name="gpp_schema_markup"
+                rows="15"
+                style="width: 100%; font-family: monospace; font-size: 13px;"
+                placeholder='Exemplo:
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Plano de Saúde Hapvida",
+  "offers": {
+    "@type": "Offer",
+    "price": "[fortaleza_menorvalor]",
+    "priceCurrency": "BRL"
+  }
+}
+</script>'
+            ><?php echo esc_textarea($schema_content); ?></textarea>
+        </div>
+        <?php
+    }
+
+    /**
+     * Salva o conteúdo da meta box de schema
+     */
+    public function salvar_metabox_schema($post_id) {
+        // Verifica nonce
+        if (!isset($_POST['gpp_schema_nonce']) || !wp_verify_nonce($_POST['gpp_schema_nonce'], 'gpp_schema_nonce_action')) {
+            return;
+        }
+
+        // Verifica autosave
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        // Verifica permissões
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        if (isset($_POST['gpp_schema_markup'])) {
+            // Salva sem sanitizar para preservar tags <script> e JSON
+            update_post_meta($post_id, '_gpp_schema_markup', wp_unslash($_POST['gpp_schema_markup']));
+        }
+    }
+
+    /**
+     * Renderiza o schema no frontend processando shortcodes
+     */
+    public function renderizar_schema_frontend() {
+        // Só processa em posts/páginas individuais no frontend
+        if (is_admin() || !is_singular()) {
+            return;
+        }
+
+        $post_id = get_the_ID();
+        if (!$post_id) {
+            return;
+        }
+
+        $schema_content = get_post_meta($post_id, '_gpp_schema_markup', true);
+
+        if (empty($schema_content)) {
+            return;
+        }
+
+        // Processa os shortcodes dentro do conteúdo do schema
+        $schema_processado = do_shortcode($schema_content);
+
+        // Limpa valores formatados para uso em JSON (remove R$ e formata para número)
+        // Isso é útil quando o shortcode retorna "R$ 99,81" mas o JSON precisa de "99.81"
+        // O usuário pode escolher usar os valores como estão ou usar o formato numérico
+
+        // Exibe o schema processado
+        echo "\n<!-- GPP Schema Markup -->\n";
+        echo $schema_processado;
+        echo "\n<!-- /GPP Schema Markup -->\n";
+    }
+
     /**
  * Registra shortcodes dinamicamente para cada cidade
  */
@@ -1764,6 +1886,25 @@ public function registrar_shortcodes() {
                     });
                 }
             }
+
+            // ===== SHORTCODE DE MENOR VALOR DA CIDADE =====
+            // Exemplo: [fortaleza_menorvalor] → retorna o menor preço entre todos os planos
+            $shortcode_menor = $shortcode_base . '_menorvalor';
+            $shortcode_base_menor = $shortcode_base;
+
+            add_shortcode($shortcode_menor, function() use ($shortcode_base_menor) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base_menor) {
+                        $menor = $this->encontrar_menor_valor_cidade($c);
+                        if ($menor && !empty($menor['valor'])) {
+                            return $menor['valor'];
+                        }
+                        return 'N/A';
+                    }
+                }
+                return 'N/A';
+            });
         }
     }
 }
