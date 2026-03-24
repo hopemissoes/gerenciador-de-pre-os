@@ -527,6 +527,81 @@ class Gerenciador_Precos_Planos {
     }
     
     /**
+     * Encontra o shortcode do maior valor de uma cidade
+     */
+    private function encontrar_maior_valor_cidade($cidade) {
+        $maior_valor = null;
+        $maior_shortcode = null;
+        $maior_valor_display = null;
+        $maior_tipo_plano = null;
+        $maior_acomodacao = null;
+        $maior_coparticipacao = null;
+
+        $tipos_plano = array(
+            'empresarial' => 'emp',
+            'individual' => 'ind',
+            'pme' => 'pme',
+            'adesao' => 'ade'
+        );
+
+        $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
+        $coparticipacoes = array('total', 'parcial');
+
+        foreach ($tipos_plano as $tipo_key => $tipo_sigla) {
+            if (!isset($cidade['tipos_planos_ativos'][$tipo_key]) || !$cidade['tipos_planos_ativos'][$tipo_key]) {
+                continue;
+            }
+
+            foreach ($acomodacoes as $acom) {
+                $campo_ativo = $tipo_key . '_' . $acom . '_ativo';
+
+                if (!isset($cidade[$campo_ativo]) || !$cidade[$campo_ativo]) {
+                    continue;
+                }
+
+                foreach ($coparticipacoes as $copart) {
+                    $campo = $tipo_key . '_' . $acom . '_' . $copart;
+
+                    if (isset($cidade[$campo]) && !empty($cidade[$campo])) {
+                        // Pega a última faixa etária (geralmente a mais cara)
+                        $ultima_faixa = end($cidade[$campo]);
+                        if (isset($ultima_faixa['valor'])) {
+                            $valor_string = $ultima_faixa['valor'];
+
+                            $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor_string);
+                            $preco_limpo = str_replace(',', '.', $preco_limpo);
+                            $preco_numerico = floatval($preco_limpo);
+
+                            $desconto = $this->obter_desconto_tipo($cidade, $tipo_key);
+                            if ($desconto > 0) {
+                                $multiplicador = 1 - ($desconto / 100);
+                                $preco_numerico = $preco_numerico * $multiplicador;
+                            }
+
+                            if ($maior_valor === null || $preco_numerico > $maior_valor) {
+                                $maior_valor = $preco_numerico;
+                                $maior_shortcode = $cidade['shortcode'] . '_' . $tipo_sigla . '_' . $acom . $copart;
+                                $maior_valor_display = $this->obter_valor_formatado_simples($cidade, $valor_string, $tipo_key);
+                                $maior_tipo_plano = $tipo_key;
+                                $maior_acomodacao = $acom;
+                                $maior_coparticipacao = $copart;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return array(
+            'shortcode' => $maior_shortcode,
+            'valor' => $maior_valor_display,
+            'tipo_plano' => $maior_tipo_plano,
+            'acomodacao' => $maior_acomodacao,
+            'coparticipacao' => $maior_coparticipacao
+        );
+    }
+
+    /**
      * Página que lista todas as variáveis disponíveis
      */
 public function pagina_variaveis() {
@@ -1749,7 +1824,7 @@ public function pagina_variaveis() {
             </p>
             <p style="color: #666; font-size: 12px; margin-bottom: 10px;">
                 <strong>Exemplos de shortcodes disponíveis:</strong><br>
-                Preços: <code>[fortaleza_menorvalor]</code> <code>[fortaleza_menortabela]</code> <code>[fortaleza_ind_ambulatorialtotal_0]</code><br>
+                Preços: <code>[fortaleza_menorvalor]</code> <code>[fortaleza_maiorvalor]</code> <code>[fortaleza_menortabela]</code> <code>[fortaleza_ind_ambulatorialtotal_0]</code><br>
                 Coparticipação: <code>[sp_bh_consultas_eletivas]</code> <code>[demais_capitais_exames_simples]</code>
             </p>
             <textarea
@@ -1960,6 +2035,25 @@ public function registrar_shortcodes() {
                     }
                 }
                 return '';
+            });
+
+            // ===== SHORTCODE DE MAIOR VALOR DA CIDADE =====
+            // Exemplo: [fortaleza_maiorvalor] → retorna o maior preço entre todos os planos
+            $shortcode_maior = $shortcode_base . '_maiorvalor';
+            $shortcode_base_maior = $shortcode_base;
+
+            add_shortcode($shortcode_maior, function() use ($shortcode_base_maior) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base_maior) {
+                        $maior = $this->encontrar_maior_valor_cidade($c);
+                        if ($maior && !empty($maior['valor'])) {
+                            return $maior['valor'];
+                        }
+                        return 'N/A';
+                    }
+                }
+                return 'N/A';
             });
         }
     }
@@ -2402,8 +2496,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                             
                             $tipos_ativos = array();
                             
-                            // Encontra o menor valor
+                            // Encontra o menor e maior valor
                             $menor = $this->encontrar_menor_valor_cidade($cidade);
+                            $maior = $this->encontrar_maior_valor_cidade($cidade);
                             
                             // Define tipos e seus emojis/cores
                             $info_tipos = array(
@@ -2451,6 +2546,14 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                             <strong style="color: #f57c00; font-size: 10px;">📊 MENOR TABELA:</strong><br>
                                             <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menortabela]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menortabela]</code>
                                             <small style="color: #888; font-size: 10px;">Tabela completa do plano mais barato</small>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <?php if ($maior['shortcode']): ?>
+                                        <div style="margin-bottom: 10px; padding: 8px; background: #f0f4ff; border-left: 4px solid #0054b8; border-radius: 3px;">
+                                            <strong style="color: #0054b8; font-size: 10px;">💎 MAIOR VALOR:</strong><br>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_maiorvalor]" style="cursor: pointer; background: #e7f3ff; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #0054b8;">[<?php echo esc_html($cidade['shortcode']); ?>_maiorvalor]</code>
+                                            <small style="color: #0054b8; font-weight: bold;"><?php echo esc_html($maior['valor']); ?></small>
                                         </div>
                                     <?php endif; ?>
                                     
