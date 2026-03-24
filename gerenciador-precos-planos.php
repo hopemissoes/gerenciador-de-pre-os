@@ -73,6 +73,9 @@ class Gerenciador_Precos_Planos {
         add_filter('rank_math/opengraph/facebook/description', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/title', 'do_shortcode', 11);
         add_filter('rank_math/opengraph/twitter/description', 'do_shortcode', 11);
+
+        // === RANK MATH SCHEMA (JSON-LD) ===
+        add_filter('rank_math/json_ld', array($this, 'processar_shortcodes_schema_rankmath'), 99, 2);
         
         // === ALL IN ONE SEO ===
         add_filter('aioseop_title', 'do_shortcode', 11);
@@ -2756,6 +2759,20 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         update_option($this->option_name, $cidades);
         wp_send_json_success('Todos os descontos foram removidos!');
+    }
+
+    /**
+     * Processa shortcodes dentro do JSON-LD gerado pelo RankMath
+     */
+    public function processar_shortcodes_schema_rankmath($data, $jsonld) {
+        if (is_array($data)) {
+            array_walk_recursive($data, function(&$value) {
+                if (is_string($value) && (strpos($value, '[') !== false || strpos($value, '%') !== false)) {
+                    $value = do_shortcode($value);
+                }
+            });
+        }
+        return $data;
     }
 
     /**
