@@ -456,6 +456,9 @@ class Gerenciador_Precos_Planos {
         $menor_valor = null;
         $menor_shortcode = null;
         $menor_valor_display = null;
+        $menor_tipo_plano = null;
+        $menor_acomodacao = null;
+        $menor_coparticipacao = null;
         
         $tipos_plano = array(
             'empresarial' => 'emp',
@@ -504,6 +507,9 @@ class Gerenciador_Precos_Planos {
                                 $menor_valor = $preco_numerico;
                                 $menor_shortcode = $cidade['shortcode'] . '_' . $tipo_sigla . '_' . $acom . $copart;
                                 $menor_valor_display = $this->obter_valor_formatado_simples($cidade, $valor_string, $tipo_key);
+                                $menor_tipo_plano = $tipo_key;
+                                $menor_acomodacao = $acom;
+                                $menor_coparticipacao = $copart;
                             }
                         }
                     }
@@ -513,7 +519,10 @@ class Gerenciador_Precos_Planos {
         
         return array(
             'shortcode' => $menor_shortcode,
-            'valor' => $menor_valor_display
+            'valor' => $menor_valor_display,
+            'tipo_plano' => $menor_tipo_plano,
+            'acomodacao' => $menor_acomodacao,
+            'coparticipacao' => $menor_coparticipacao
         );
     }
     
@@ -1740,7 +1749,7 @@ public function pagina_variaveis() {
             </p>
             <p style="color: #666; font-size: 12px; margin-bottom: 10px;">
                 <strong>Exemplos de shortcodes disponíveis:</strong><br>
-                Preços: <code>[fortaleza_menorvalor]</code> <code>[fortaleza_ind_ambulatorialtotal_0]</code><br>
+                Preços: <code>[fortaleza_menorvalor]</code> <code>[fortaleza_menortabela]</code> <code>[fortaleza_ind_ambulatorialtotal_0]</code><br>
                 Coparticipação: <code>[sp_bh_consultas_eletivas]</code> <code>[demais_capitais_exames_simples]</code>
             </p>
             <textarea
@@ -1931,6 +1940,26 @@ public function registrar_shortcodes() {
                     }
                 }
                 return 'N/A';
+            });
+
+            // ===== SHORTCODE DE MENOR TABELA COMPLETA DA CIDADE =====
+            // Exemplo: [fortaleza_menortabela] → retorna a tabela completa do plano com menor preço
+            $shortcode_menor_tabela = $shortcode_base . '_menortabela';
+            $shortcode_base_menor_tabela = $shortcode_base;
+
+            add_shortcode($shortcode_menor_tabela, function() use ($shortcode_base_menor_tabela) {
+                $cidades = $this->obter_todas_cidades();
+                foreach ($cidades as $c) {
+                    if ($c['shortcode'] === $shortcode_base_menor_tabela) {
+                        $menor = $this->encontrar_menor_valor_cidade($c);
+                        if ($menor && !empty($menor['tipo_plano'])) {
+                            $filtro = ($menor['coparticipacao'] === 'total') ? 'SOMENTE_TOTAL' : 'SOMENTE_PARCIAL';
+                            return $this->renderizar_tabela_cidade($c, $menor['tipo_plano'], false, $filtro);
+                        }
+                        return '';
+                    }
+                }
+                return '';
             });
         }
     }
@@ -2416,8 +2445,12 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                     <?php if ($menor['shortcode']): ?>
                                         <div style="margin-bottom: 10px; padding: 8px; background: #fff9e6; border-left: 4px solid #ffc107; border-radius: 3px;">
                                             <strong style="color: #f57c00; font-size: 10px;">💰 MENOR VALOR:</strong><br>
-                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($menor['shortcode']); ?>]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($menor['shortcode']); ?>]</code>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
                                             <small style="color: #f57c00; font-weight: bold;"><?php echo esc_html($menor['valor']); ?></small>
+                                            <br>
+                                            <strong style="color: #f57c00; font-size: 10px;">📊 MENOR TABELA:</strong><br>
+                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menortabela]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menortabela]</code>
+                                            <small style="color: #888; font-size: 10px;">Tabela completa do plano mais barato</small>
                                         </div>
                                     <?php endif; ?>
                                     
