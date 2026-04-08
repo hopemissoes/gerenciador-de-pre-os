@@ -143,6 +143,7 @@ class Gerenciador_Precos_Planos {
         $this->registrar_shortcodes();
         $this->registrar_shortcodes_variaveis();
         $this->registrar_shortcodes_regionais();
+        $this->registrar_shortcodes_data();
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -1549,6 +1550,36 @@ public function pagina_variaveis() {
     }
 
     /**
+     * Registra shortcodes de data: [ano_atual] e [mes_atual]
+     * Retorna o ano e mês atuais para uso em títulos e meta descrições
+     */
+    public function registrar_shortcodes_data() {
+        // Shortcode [ano_atual] - retorna o ano atual (ex: 2026)
+        add_shortcode('ano_atual', function() {
+            return date('Y');
+        });
+
+        // Shortcode [mes_atual] - retorna o mês atual em português (ex: Abril)
+        add_shortcode('mes_atual', function() {
+            $meses = array(
+                1  => 'Janeiro',
+                2  => 'Fevereiro',
+                3  => 'Março',
+                4  => 'Abril',
+                5  => 'Maio',
+                6  => 'Junho',
+                7  => 'Julho',
+                8  => 'Agosto',
+                9  => 'Setembro',
+                10 => 'Outubro',
+                11 => 'Novembro',
+                12 => 'Dezembro'
+            );
+            return $meses[(int) date('n')];
+        });
+    }
+
+    /**
      * Renderiza a tabela de valores regionais em HTML
      * @param array $valores - Valores regionais salvos
      * @param string $regiao - Nome da região (sp_bh ou demais_capitais)
@@ -1617,7 +1648,49 @@ public function pagina_variaveis() {
         if (!function_exists('rank_math_register_var_replacement')) {
             return;
         }
-        
+
+        // Registra variáveis de data no RankMath: %ano_atual% e %mes_atual%
+        rank_math_register_var_replacement(
+            'ano_atual',
+            array(
+                'name'        => 'Ano Atual',
+                'description' => 'Retorna o ano atual (ex: ' . date('Y') . ')',
+                'variable'    => 'ano_atual',
+                'example'     => date('Y'),
+            ),
+            function() {
+                return date('Y');
+            }
+        );
+
+        $meses_pt = array(
+            1  => 'Janeiro',
+            2  => 'Fevereiro',
+            3  => 'Março',
+            4  => 'Abril',
+            5  => 'Maio',
+            6  => 'Junho',
+            7  => 'Julho',
+            8  => 'Agosto',
+            9  => 'Setembro',
+            10 => 'Outubro',
+            11 => 'Novembro',
+            12 => 'Dezembro'
+        );
+
+        rank_math_register_var_replacement(
+            'mes_atual',
+            array(
+                'name'        => 'Mês Atual',
+                'description' => 'Retorna o mês atual em português (ex: ' . $meses_pt[(int) date('n')] . ')',
+                'variable'    => 'mes_atual',
+                'example'     => $meses_pt[(int) date('n')],
+            ),
+            function() use ($meses_pt) {
+                return $meses_pt[(int) date('n')];
+            }
+        );
+
         $cidades = $this->obter_todas_cidades();
         
         if (empty($cidades)) {
