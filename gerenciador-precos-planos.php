@@ -2166,8 +2166,16 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     
     ?>
     <div class="gpp-container-cidade">
-        
-        <?php 
+
+        <?php
+        // Exibe a nota/observação do plano, se houver
+        $campo_nota = $tipo_plano . '_nota';
+        if (isset($cidade_data[$campo_nota]) && trim($cidade_data[$campo_nota]) !== ''):
+        ?>
+            <div class="gpp-plano-nota"><?php echo nl2br(esc_html($cidade_data[$campo_nota])); ?></div>
+        <?php endif; ?>
+
+        <?php
         foreach ($acomodacoes as $acom_key => $acom_nome):
             // Se já renderizou uma acomodação e o filtro é específico, para o loop
             if ($renderizar_apenas_primeira && $ja_renderizou) {
@@ -2420,6 +2428,19 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             font-style: italic !important;
         }
         
+        .gpp-plano-nota {
+            text-align: left !important;
+            font-weight: 500 !important;
+            font-size: 15px !important;
+            line-height: 1.6 !important;
+            margin: 15px 0 20px 0 !important;
+            padding: 15px 20px !important;
+            color: #333333 !important;
+            background-color: #e8f1fb !important;
+            border-left: 5px solid #0054B8 !important;
+            border-radius: 12px !important;
+        }
+
         .gpp-observacoes-info {
             text-align: left !important;
             font-weight: 600 !important;
@@ -2784,7 +2805,13 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                     ?>
                         <div class="gpp-secao-tipo" id="gpp-secao-<?php echo $tipo_key; ?>" style="display: none; padding: 20px; margin: 20px 0; border-radius: 5px;">
                             <h3 style="margin-top: 0;"><?php echo $tipo_info['emoji']; ?> Planos <?php echo $tipo_info['nome']; ?></h3>
-                            
+
+                            <div style="margin: 15px 0; padding: 15px;">
+                                <label style="color: #FFFFFF; display: block; margin-bottom: 5px;"><strong>📝 Nota / Observação do plano <?php echo $tipo_info['nome']; ?> (opcional):</strong></label>
+                                <textarea class="large-text" id="gpp-nota-<?php echo $tipo_key; ?>" rows="3" placeholder="Ex.: Plano voltado para empresas a partir de 2 vidas..."></textarea>
+                                <p style="color: #FFFFFF; font-size: 12px; margin: 5px 0 0 0;">Esse texto aparecerá na página, junto da tabela deste plano.</p>
+                            </div>
+
                             <div style="margin: 15px 0; padding: 15px;">
                                 <p style="color: #FFFFFF;"><strong>Selecione as acomodações disponíveis:</strong></p>
                                 <label style="display: block; margin: 5px 0;">
@@ -3414,7 +3441,10 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                 if (cidade.tipos_planos_ativos && cidade.tipos_planos_ativos[tipo]) {
                                     $('#gpp-tipo-' + tipo).prop('checked', true);
                                     $('#gpp-secao-' + tipo).show();
-                                    
+
+                                    // Preenche a nota/observação do plano
+                                    $('#gpp-nota-' + tipo).val(cidade[tipo + '_nota'] || '');
+
                                     acomodacoes.forEach(function(acom) {
                                         var campoAtivoAcom = tipo + '_' + acom + '_ativo';
                                         if (cidade[campoAtivoAcom]) {
@@ -3489,8 +3519,11 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 
                 tipos.forEach(function(tipo) {
                     formData.tipos_planos_ativos[tipo] = $('#gpp-tipo-' + tipo).is(':checked');
-                    
+
                     if (formData.tipos_planos_ativos[tipo]) {
+                        // Coleta a nota/observação do plano
+                        formData.dados_planos[tipo + '_nota'] = $('#gpp-nota-' + tipo).val();
+
                         acomodacoes.forEach(function(acom) {
                             var isAcomAtivo = $('.gpp-acomodacao-check[data-tipo="' + tipo + '"][data-acomodacao="' + acom + '"]').is(':checked');
                             formData.dados_planos[tipo + '_' + acom + '_ativo'] = isAcomAtivo;
@@ -3616,6 +3649,9 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 if (strpos($campo, '_ativo') !== false) {
                     // Campo booleano
                     $nova_cidade[$campo] = ($valor === 'true' || $valor === true || $valor === 1 || $valor === '1');
+                } elseif (substr($campo, -5) === '_nota') {
+                    // Campo de nota/observação - texto livre
+                    $nova_cidade[$campo] = sanitize_textarea_field($valor);
                 } else {
                     // Campo JSON - normaliza o formato
                     if (!empty($valor)) {
