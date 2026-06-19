@@ -2168,14 +2168,6 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     <div class="gpp-container-cidade">
 
         <?php
-        // Exibe a nota/observação do plano, se houver
-        $campo_nota = $tipo_plano . '_nota';
-        if (isset($cidade_data[$campo_nota]) && trim($cidade_data[$campo_nota]) !== ''):
-        ?>
-            <div class="gpp-plano-nota"><?php echo nl2br(esc_html($cidade_data[$campo_nota])); ?></div>
-        <?php endif; ?>
-
-        <?php
         foreach ($acomodacoes as $acom_key => $acom_nome):
             // Se já renderizou uma acomodação e o filtro é específico, para o loop
             if ($renderizar_apenas_primeira && $ja_renderizou) {
@@ -2428,19 +2420,6 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             font-style: italic !important;
         }
         
-        .gpp-plano-nota {
-            text-align: left !important;
-            font-weight: 500 !important;
-            font-size: 15px !important;
-            line-height: 1.6 !important;
-            margin: 15px 0 20px 0 !important;
-            padding: 15px 20px !important;
-            color: #333333 !important;
-            background-color: #e8f1fb !important;
-            border-left: 5px solid #0054B8 !important;
-            border-radius: 12px !important;
-        }
-
         .gpp-observacoes-info {
             text-align: left !important;
             font-weight: 600 !important;
@@ -2809,7 +2788,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                             <div style="margin: 15px 0; padding: 15px;">
                                 <label style="color: #FFFFFF; display: block; margin-bottom: 5px;"><strong>📝 Nota / Observação do plano <?php echo $tipo_info['nome']; ?> (opcional):</strong></label>
                                 <textarea class="large-text" id="gpp-nota-<?php echo $tipo_key; ?>" rows="3" placeholder="Ex.: Plano voltado para empresas a partir de 2 vidas..."></textarea>
-                                <p style="color: #FFFFFF; font-size: 12px; margin: 5px 0 0 0;">Esse texto aparecerá na página, junto da tabela deste plano.</p>
+                                <p style="color: #FFFFFF; font-size: 12px; margin: 5px 0 0 0;">Anotação interna (uso administrativo). <strong>Não</strong> é exibida no site.</p>
                             </div>
 
                             <div style="margin: 15px 0; padding: 15px;">
