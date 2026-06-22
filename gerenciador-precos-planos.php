@@ -2809,6 +2809,136 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         <?php
     }
 
+    /**
+     * Renderiza o painel de REFERÊNCIA dos shortcodes de uma operadora.
+     * Mostra todos os padrões disponíveis já com o prefixo da operadora
+     * preenchido + um exemplo real (usando a primeira cidade cadastrada,
+     * se houver). Os shortcodes podem ser copiados com 1 clique.
+     */
+    public function renderizar_referencia_shortcodes($operadora_ativa) {
+        $operadora_ativa = $this->sanitizar_operadora($operadora_ativa);
+        $op = $this->operadoras[$operadora_ativa];
+        $prefixo = $op['prefixo'];
+        $cor = $op['cor'];
+
+        // Cidade de exemplo: usa a primeira cadastrada; senão, placeholder
+        $cidades = $this->obter_todas_cidades($operadora_ativa);
+        if (!empty($cidades) && isset($cidades[0]['shortcode'])) {
+            $cidade_ex = $cidades[0]['shortcode'];                 // já vem com prefixo
+            $slug_base_ex = $this->obter_slug_base_cidade(array(
+                'shortcode' => $cidade_ex,
+                'operadora' => $operadora_ativa,
+            ));
+        } else {
+            $cidade_ex = $prefixo . 'cidade';
+            $slug_base_ex = 'cidade';
+        }
+
+        // Helper local para imprimir uma linha de referência
+        $linha = function ($descricao, $padrao, $exemplo) use ($cor) {
+            ?>
+            <tr>
+                <td style="padding:8px 10px; border-bottom:1px solid #eee;"><?php echo esc_html($descricao); ?></td>
+                <td style="padding:8px 10px; border-bottom:1px solid #eee;">
+                    <code style="background:#f0f0f0; padding:2px 6px; border-radius:3px; font-size:12px;"><?php echo esc_html($padrao); ?></code>
+                </td>
+                <td style="padding:8px 10px; border-bottom:1px solid #eee;">
+                    <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($exemplo); ?>" title="Clique para copiar" style="cursor:pointer; background:#e7f3ff; padding:2px 6px; border-radius:3px; font-size:12px; border:1px solid <?php echo esc_attr($cor); ?>;"><?php echo esc_html($exemplo); ?></code>
+                </td>
+            </tr>
+            <?php
+        };
+        ?>
+        <details style="background:#fff; border:2px solid <?php echo esc_attr($cor); ?>; border-radius:5px; margin:20px 0; padding:0;">
+            <summary style="cursor:pointer; padding:15px 20px; font-size:16px; font-weight:bold; color:#fff; background:<?php echo esc_attr($cor); ?>; border-radius:3px;">
+                📚 Referência de Shortcodes — <?php echo esc_html($op['nome']); ?>
+                <?php if ($prefixo !== ''): ?>(prefixo <code style="background:rgba(255,255,255,0.25); color:#fff; padding:1px 5px; border-radius:3px;"><?php echo esc_html($prefixo); ?></code>)<?php endif; ?>
+            </summary>
+
+            <div style="padding:20px;">
+                <p style="margin-top:0; color:#444;">
+                    Substitua <code>CIDADE</code> pelo slug da cidade (ex.: <code><?php echo esc_html($slug_base_ex); ?></code>).
+                    <?php if ($prefixo !== ''): ?>
+                        Para <?php echo esc_html($op['nome']); ?>, todos os shortcodes começam com <code><?php echo esc_html($prefixo); ?></code>.
+                    <?php else: ?>
+                        A Hapvida <strong>não usa prefixo</strong> (mantém os shortcodes originais).
+                    <?php endif; ?>
+                    Os <code>TIPO</code> possíveis são: <code>empresarial</code>, <code>individual</code>, <code>pme</code>, <code>adesao</code>.
+                </p>
+
+                <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">🧾 Tabelas de preço</h3>
+                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                    <thead>
+                        <tr style="background:<?php echo esc_attr($cor); ?>; color:#fff;">
+                            <th style="padding:8px 10px; text-align:left;">O que faz</th>
+                            <th style="padding:8px 10px; text-align:left;">Padrão</th>
+                            <th style="padding:8px 10px; text-align:left;">Exemplo (clique p/ copiar)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $linha('Tabela completa (total + parcial)', '[' . $prefixo . 'CIDADE_TIPO]', '[' . $cidade_ex . '_empresarial]');
+                        $linha('Só coparticipação TOTAL', '[' . $prefixo . 'CIDADE_TIPO_total]', '[' . $cidade_ex . '_empresarial_total]');
+                        $linha('Só coparticipação PARCIAL', '[' . $prefixo . 'CIDADE_TIPO_parcial]', '[' . $cidade_ex . '_empresarial_parcial]');
+                        $linha('Versão "sem disclaimers" (sufixo _sd)', '[' . $prefixo . 'CIDADE_TIPO_total_sd]', '[' . $cidade_ex . '_empresarial_total_sd]');
+                        ?>
+                    </tbody>
+                </table>
+
+                <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">💰 Valores resumidos da cidade</h3>
+                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                    <tbody>
+                        <?php
+                        $linha('Menor valor (texto)', '[' . $prefixo . 'CIDADE_menorvalor]', '[' . $cidade_ex . '_menorvalor]');
+                        $linha('Maior valor (texto)', '[' . $prefixo . 'CIDADE_maiorvalor]', '[' . $cidade_ex . '_maiorvalor]');
+                        $linha('Tabela do plano mais barato', '[' . $prefixo . 'CIDADE_menortabela]', '[' . $cidade_ex . '_menortabela]');
+                        ?>
+                    </tbody>
+                </table>
+
+                <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">🔢 Valor de uma faixa etária</h3>
+                <p style="margin:0 0 8px; color:#666; font-size:13px;">Siglas do tipo: <code>emp</code>, <code>ind</code>, <code>pme</code>, <code>ade</code>. Acomodação: <code>ambulatorial</code>, <code>enfermaria</code>, <code>apartamento</code>. Faixas registradas: <code>0</code> (primeira), <code>1</code> e <code>9</code> (última). Sem o número = primeira faixa.</p>
+                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                    <tbody>
+                        <?php
+                        $linha('Faixa específica (total)', '[' . $prefixo . 'CIDADE_SIGLA_ACOMtotal_N]', '[' . $cidade_ex . '_emp_ambulatorialtotal_0]');
+                        $linha('Primeira faixa (atalho, total)', '[' . $prefixo . 'CIDADE_SIGLA_ACOMtotal]', '[' . $cidade_ex . '_emp_ambulatorialtotal]');
+                        $linha('Faixa específica (parcial)', '[' . $prefixo . 'CIDADE_SIGLA_ACOMparcial_N]', '[' . $cidade_ex . '_emp_ambulatorialparcial_9]');
+                        ?>
+                    </tbody>
+                </table>
+
+                <h3 style="color:#8E44AD; margin-bottom:5px;">⚖️ Comparar operadoras (SEM prefixo)</h3>
+                <p style="margin:0 0 8px; color:#666; font-size:13px;">Mostra a MESMA cidade em todas as operadoras, em cards responsivos. Use sempre o slug <strong>sem</strong> prefixo.</p>
+                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                    <tbody>
+                        <?php
+                        $linha('Comparar (total)', '[comparar_CIDADE_TIPO_total]', '[comparar_' . $slug_base_ex . '_empresarial_total]');
+                        $linha('Comparar (parcial)', '[comparar_CIDADE_TIPO_parcial]', '[comparar_' . $slug_base_ex . '_empresarial_parcial]');
+                        $linha('Comparar (ambas)', '[comparar_CIDADE_TIPO]', '[comparar_' . $slug_base_ex . '_empresarial]');
+                        ?>
+                    </tbody>
+                </table>
+
+                <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">📅 Data (global, qualquer operadora)</h3>
+                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                    <tbody>
+                        <?php
+                        $linha('Ano atual', '[ano_atual]', '[ano_atual]');
+                        $linha('Mês atual (por extenso)', '[mes_atual]', '[mes_atual]');
+                        ?>
+                    </tbody>
+                </table>
+
+                <p style="margin-top:15px; color:#666; font-size:13px;">
+                    👉 Para ver a lista completa cidade por cidade (todas as faixas), use
+                    <a href="<?php echo admin_url('admin.php?page=gpp-variaveis&operadora=' . $operadora_ativa); ?>">Variáveis Dinâmicas</a>.
+                </p>
+            </div>
+        </details>
+        <?php
+    }
+
     // CONTINUA NO PRÓXIMO COMENTÁRIO...
     /**
      * Página administrativa principal
@@ -2839,6 +2969,8 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                     &nbsp;—&nbsp; shortcodes <strong>sem prefixo</strong>
                 <?php endif; ?>
             </div>
+
+            <?php $this->renderizar_referencia_shortcodes($operadora_ativa); ?>
 
             <button id="gpp-adicionar-cidade" class="button button-primary" style="margin-bottom: 20px;">Adicionar Nova Cidade em <?php echo esc_html($operadora_cfg['nome']); ?></button>
             
