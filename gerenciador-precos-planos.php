@@ -26,32 +26,36 @@ class Gerenciador_Precos_Planos {
      */
     private $operadoras = array(
         'hapvida' => array(
-            'nome'      => 'Hapvida',
-            'option'    => 'gpp_cidades_planos',
-            'prefixo'   => '',
-            'cor'       => '#0054B8',
-            'url_botao' => 'https://tabelaplanos.com.br/plano-hapvida-valores',
+            'nome'         => 'Hapvida',
+            'option'       => 'gpp_cidades_planos',
+            'prefixo'      => '',
+            'cor'          => '#0054B8',
+            'cor_destaque' => '#F05A22',
+            'url_botao'    => 'https://tabelaplanos.com.br/plano-hapvida-valores',
         ),
         'amil' => array(
-            'nome'      => 'Amil',
-            'option'    => 'gpp_cidades_planos_amil',
-            'prefixo'   => 'amil_',
-            'cor'       => '#0072CE',
-            'url_botao' => 'https://tabelaplanos.com.br/plano-amil-valores',
+            'nome'         => 'Amil',
+            'option'       => 'gpp_cidades_planos_amil',
+            'prefixo'      => 'amil_',
+            'cor'          => '#002D72',
+            'cor_destaque' => '#009FE3',
+            'url_botao'    => 'https://tabelaplanos.com.br/plano-amil-valores',
         ),
         'unimed' => array(
-            'nome'      => 'Unimed',
-            'option'    => 'gpp_cidades_planos_unimed',
-            'prefixo'   => 'unimed_',
-            'cor'       => '#00995D',
-            'url_botao' => 'https://tabelaplanos.com.br/plano-unimed-valores',
+            'nome'         => 'Unimed',
+            'option'       => 'gpp_cidades_planos_unimed',
+            'prefixo'      => 'unimed_',
+            'cor'          => '#00995D',
+            'cor_destaque' => '#FF6F00',
+            'url_botao'    => 'https://tabelaplanos.com.br/plano-unimed-valores',
         ),
         'sulamerica' => array(
-            'nome'      => 'SulAmérica',
-            'option'    => 'gpp_cidades_planos_sulamerica',
-            'prefixo'   => 'sulamerica_',
-            'cor'       => '#ED8B00',
-            'url_botao' => 'https://tabelaplanos.com.br/plano-sulamerica-valores',
+            'nome'         => 'SulAmérica',
+            'option'       => 'gpp_cidades_planos_sulamerica',
+            'prefixo'      => 'sulamerica_',
+            'cor'          => '#ED8B00',
+            'cor_destaque' => '#00857C',
+            'url_botao'    => 'https://tabelaplanos.com.br/plano-sulamerica-valores',
         ),
     );
 
@@ -204,6 +208,7 @@ class Gerenciador_Precos_Planos {
         $this->registrar_shortcodes_variaveis();
         $this->registrar_shortcodes_regionais();
         $this->registrar_shortcodes_data();
+        $this->registrar_shortcodes_comparar();
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -2184,6 +2189,154 @@ public function registrar_shortcodes() {
 }
 
     /**
+     * Calcula o "slug base" de uma cidade (sem o prefixo da operadora).
+     * Ex.: cidade da Unimed com shortcode "unimed_fortaleza" => "fortaleza".
+     */
+    private function obter_slug_base_cidade($cidade) {
+        $shortcode = isset($cidade['shortcode']) ? $cidade['shortcode'] : '';
+        $operadora = isset($cidade['operadora']) ? $cidade['operadora'] : 'hapvida';
+        $prefixo = isset($this->operadoras[$operadora]) ? $this->operadoras[$operadora]['prefixo'] : '';
+        if ($prefixo !== '' && strpos($shortcode, $prefixo) === 0) {
+            return substr($shortcode, strlen($prefixo));
+        }
+        return $shortcode;
+    }
+
+    /**
+     * Verifica se uma cidade tem dados cadastrados para um tipo de plano,
+     * considerando o filtro de coparticipação (AMBAS / SOMENTE_TOTAL / SOMENTE_PARCIAL).
+     */
+    private function cidade_tem_dados_tipo($cidade, $tipo, $filtro_coparticipacao = 'AMBAS') {
+        if (!isset($cidade['tipos_planos_ativos'][$tipo]) || !$cidade['tipos_planos_ativos'][$tipo]) {
+            return false;
+        }
+
+        $acomodacoes = array('ambulatorial', 'enfermaria', 'apartamento');
+
+        foreach ($acomodacoes as $acom) {
+            $campo_ativo = $tipo . '_' . $acom . '_ativo';
+            if (empty($cidade[$campo_ativo])) {
+                continue;
+            }
+
+            if ($filtro_coparticipacao === 'AMBAS' || $filtro_coparticipacao === 'SOMENTE_TOTAL') {
+                if (!empty($cidade[$tipo . '_' . $acom . '_total'])) {
+                    return true;
+                }
+            }
+            if ($filtro_coparticipacao === 'AMBAS' || $filtro_coparticipacao === 'SOMENTE_PARCIAL') {
+                if (!empty($cidade[$tipo . '_' . $acom . '_parcial'])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Registra os shortcodes de COMPARAÇÃO entre operadoras para uma mesma cidade.
+     * Formato: [comparar_{cidade}_{tipo}], [comparar_{cidade}_{tipo}_total],
+     *          [comparar_{cidade}_{tipo}_parcial]
+     * Ex.: [comparar_fortaleza_empresarial_total]
+     */
+    public function registrar_shortcodes_comparar() {
+        $todas = $this->obter_todas_cidades_global();
+        if (empty($todas)) {
+            return;
+        }
+
+        $tipos_plano = array('empresarial', 'individual', 'pme', 'adesao');
+
+        // Mapeia: slug_base => lista de tipos existentes (em qualquer operadora)
+        $mapa = array();
+        foreach ($todas as $cidade) {
+            $slug_base = $this->obter_slug_base_cidade($cidade);
+            if ($slug_base === '') {
+                continue;
+            }
+            if (!isset($mapa[$slug_base])) {
+                $mapa[$slug_base] = array();
+            }
+            foreach ($tipos_plano as $tipo) {
+                if ($this->cidade_tem_dados_tipo($cidade, $tipo, 'AMBAS')) {
+                    $mapa[$slug_base][$tipo] = true;
+                }
+            }
+        }
+
+        foreach ($mapa as $slug_base => $tipos_existentes) {
+            foreach (array_keys($tipos_existentes) as $tipo) {
+                $variantes = array(
+                    ''         => 'AMBAS',
+                    '_total'   => 'SOMENTE_TOTAL',
+                    '_parcial' => 'SOMENTE_PARCIAL',
+                );
+
+                foreach ($variantes as $sufixo => $filtro) {
+                    $shortcode_name = 'comparar_' . $slug_base . '_' . $tipo . $sufixo;
+                    $slug_local = $slug_base;
+                    $tipo_local = $tipo;
+                    $filtro_local = $filtro;
+
+                    add_shortcode($shortcode_name, function() use ($slug_local, $tipo_local, $filtro_local) {
+                        return $this->renderizar_comparacao_operadoras($slug_local, $tipo_local, $filtro_local);
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Renderiza a comparação entre operadoras (cards lado a lado / empilhados)
+     * para uma mesma cidade e tipo de plano.
+     */
+    public function renderizar_comparacao_operadoras($slug_base, $tipo_plano, $filtro_coparticipacao = 'AMBAS') {
+        $cards = array();
+
+        // Percorre as operadoras na ordem da configuração
+        foreach ($this->operadoras as $op_key => $op_info) {
+            $shortcode_alvo = $op_info['prefixo'] . $slug_base;
+
+            $cidade_encontrada = null;
+            foreach ($this->obter_todas_cidades($op_key) as $cidade) {
+                if (isset($cidade['shortcode']) && $cidade['shortcode'] === $shortcode_alvo) {
+                    $cidade['operadora'] = $op_key;
+                    $cidade_encontrada = $cidade;
+                    break;
+                }
+            }
+
+            if (!$cidade_encontrada) {
+                continue;
+            }
+
+            if (!$this->cidade_tem_dados_tipo($cidade_encontrada, $tipo_plano, $filtro_coparticipacao)) {
+                continue;
+            }
+
+            $tabela_html = $this->renderizar_tabela_cidade($cidade_encontrada, $tipo_plano, false, $filtro_coparticipacao);
+
+            ob_start();
+            ?>
+            <div class="gpp-card-operadora gpp-op-<?php echo esc_attr($op_key); ?>">
+                <div class="gpp-card-header" style="background-color: <?php echo esc_attr($op_info['cor']); ?>;">
+                    <?php echo esc_html($op_info['nome']); ?>
+                </div>
+                <?php echo $tabela_html; ?>
+            </div>
+            <?php
+            $cards[] = ob_get_clean();
+        }
+
+        if (empty($cards)) {
+            return '';
+        }
+
+        return '<div class="gpp-comparacao-operadoras">' . implode('', $cards) . '</div>';
+    }
+
+    /**
  * Renderiza a tabela para uma cidade específica e tipo de plano
  */
 /**
@@ -2222,7 +2375,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     $ja_renderizou = false;
     
     ?>
-    <div class="gpp-container-cidade">
+    <div class="gpp-container-cidade gpp-op-<?php echo esc_attr($operadora_key); ?>">
 
         <?php
         foreach ($acomodacoes as $acom_key => $acom_nome):
@@ -2584,6 +2737,74 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 margin: 10px auto !important;
             }
         }
+
+        /* ===== CORES POR OPERADORA ===== */
+        <?php foreach ($this->operadoras as $op_key => $op_info): ?>
+        .gpp-op-<?php echo esc_attr($op_key); ?> .tabela-precos-hapvida table th {
+            background-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+        }
+        .gpp-op-<?php echo esc_attr($op_key); ?> .tabela-precos-hapvida .valor-destaque {
+            color: <?php echo esc_attr($op_info['cor_destaque']); ?> !important;
+        }
+        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-observacoes-info {
+            border-left-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+        }
+        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-botao-consulta {
+            background-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+        }
+        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-desconto-pequeno,
+        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-desconto-info {
+            color: <?php echo esc_attr($op_info['cor_destaque']); ?> !important;
+        }
+        <?php endforeach; ?>
+
+        /* ===== COMPARAÇÃO ENTRE OPERADORAS (CARDS RESPONSIVOS) ===== */
+        .gpp-comparacao-operadoras {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 24px !important;
+            align-items: stretch !important;
+            margin: 20px 0 !important;
+        }
+
+        .gpp-card-operadora {
+            flex: 1 1 320px !important;
+            min-width: 300px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            background: #FFFFFF !important;
+            border-radius: 20px !important;
+            overflow: hidden !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+        }
+
+        .gpp-card-operadora .gpp-card-header {
+            padding: 16px 18px !important;
+            color: #FFFFFF !important;
+            font-weight: bold !important;
+            font-size: 20px !important;
+            text-align: center !important;
+            letter-spacing: 0.5px !important;
+        }
+
+        .gpp-card-operadora .gpp-container-cidade {
+            padding: 0 16px 16px 16px !important;
+        }
+
+        .gpp-card-operadora .tabela-precos-hapvida {
+            margin: 16px 0 0 0 !important;
+            box-shadow: none !important;
+        }
+
+        @media screen and (max-width: 768px) {
+            .gpp-comparacao-operadoras {
+                gap: 16px !important;
+            }
+            .gpp-card-operadora {
+                flex: 1 1 100% !important;
+                min-width: 100% !important;
+            }
+        }
         </style>
         <?php
     }
@@ -2755,7 +2976,23 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
-                                    
+
+                                    <?php if (!empty($shortcodes_por_tipo)):
+                                        $slug_base_cidade = $this->obter_slug_base_cidade($cidade);
+                                    ?>
+                                        <div style="margin-top: 10px; padding: 6px; background: #f3e8ff; border-left: 3px solid #8E44AD; border-radius: 2px;">
+                                            <strong style="color: #8E44AD; font-size: 10px;">⚖️ COMPARAR OPERADORAS (mesma cidade):</strong><br>
+                                            <div style="margin-top: 3px;">
+                                                <?php foreach ($shortcodes_por_tipo as $tipo_key => $tipo_data):
+                                                    $sc_comp_total = '[comparar_' . $slug_base_cidade . '_' . $tipo_key . '_total]';
+                                                ?>
+                                                    <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($sc_comp_total); ?>" style="cursor: pointer; background: #ede0ff; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid #8E44AD;"><?php echo esc_html($sc_comp_total); ?></code>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <small style="color: #666; font-size: 9px;">Mostra Hapvida/Amil/Unimed/SulAmérica juntas. Troque <code>_total</code> por <code>_parcial</code> ou remova o sufixo para ambas.</small>
+                                        </div>
+                                    <?php endif; ?>
+
                                     <?php if (empty($shortcodes_por_tipo)): ?>
                                         <em>Nenhum plano cadastrado</em>
                                     <?php endif; ?>
@@ -2786,6 +3023,14 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                     <li>Configure os preços usando JSON nos campos que aparecerem</li>
                     <li>Copie o shortcode e cole na página</li>
                 </ol>
+                <h3 style="margin-top: 15px;">⚖️ Comparar operadoras na mesma página</h3>
+                <p>Use o shortcode <code>[comparar_CIDADE_TIPO_total]</code> para exibir as tabelas de <strong>todas as operadoras</strong> que têm aquela cidade, lado a lado (responsivo). Exemplos:</p>
+                <ul style="margin-left: 20px;">
+                    <li><code>[comparar_fortaleza_empresarial_total]</code> — compara a coparticipação total empresarial em Fortaleza entre Hapvida, Amil, Unimed e SulAmérica.</li>
+                    <li><code>[comparar_fortaleza_empresarial_parcial]</code> — versão parcial.</li>
+                    <li><code>[comparar_fortaleza_empresarial]</code> — mostra total e parcial.</li>
+                </ul>
+                <p style="color:#666;"><em>A cidade no shortcode de comparação é sempre o slug <strong>sem</strong> prefixo de operadora (ex.: <code>fortaleza</code>), pois ele junta todas as operadoras.</em></p>
             </div>
         </div>
         
