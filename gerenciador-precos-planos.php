@@ -3440,6 +3440,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                         <?php
                         $linha('Comparar todas (sem tipo)', '[comparar_CIDADE]', '[comparar_' . $slug_base_ex . ']');
                         $linha('Comparar por tipo da Hapvida', '[comparar_CIDADE_TIPO_total]', '[comparar_' . $slug_base_ex . '_empresarial_total]');
+                        $linha('Tabela comparativa (cotação família)', '[tabela_comparativa cidade="CIDADE"]', '[tabela_comparativa cidade="' . $slug_base_ex . '"]');
                         ?>
                     </tbody>
                 </table>
@@ -3515,6 +3516,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                         $linha('Comparar (total)', '[comparar_CIDADE_TIPO_total]', '[comparar_' . $slug_base_ex . '_empresarial_total]');
                         $linha('Comparar (parcial)', '[comparar_CIDADE_TIPO_parcial]', '[comparar_' . $slug_base_ex . '_empresarial_parcial]');
                         $linha('Comparar (ambas)', '[comparar_CIDADE_TIPO]', '[comparar_' . $slug_base_ex . '_empresarial]');
+                        $linha('Tabela comparativa (cotação família)', '[tabela_comparativa cidade="CIDADE"]', '[tabela_comparativa cidade="' . $slug_base_ex . '"]');
                         ?>
                     </tbody>
                 </table>
