@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 6.2
+Version: 6.3
 Author: Seu Nome
 */
 
@@ -223,6 +223,7 @@ class Gerenciador_Precos_Planos {
         $this->registrar_shortcodes_regionais();
         $this->registrar_shortcodes_data();
         $this->registrar_shortcodes_comparar();
+        $this->registrar_shortcode_comparativo();
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -2612,6 +2613,279 @@ public function registrar_shortcodes() {
     }
 
     /**
+     * ===== TABELA COMPARATIVA DE COTAÇÃO (FAMÍLIA) =====
+     * Registra o shortcode [tabela_comparativa cidade="fortaleza"] que cota o
+     * valor de uma família nas 4 operadoras e monta uma tabela comparativa.
+     *
+     * Atributos:
+     *   cidade          (obrigatório) slug da cidade SEM prefixo (ex.: fortaleza)
+     *   idades          (opcional)    idades separadas por vírgula. Default "35,35,5,8"
+     *   tipo            (opcional)    força um tipo de plano da Hapvida (empresarial, ...)
+     *   acomodacao      (opcional)    força acomodação da Hapvida (ambulatorial, ...)
+     *   coparticipacao  (opcional)    força total|parcial da Hapvida
+     *   titulo_economia (opcional)    rótulo da última coluna. Default "Economia vs Hapvida"
+     */
+    public function registrar_shortcode_comparativo() {
+        add_shortcode('tabela_comparativa', array($this, 'render_tabela_comparativa'));
+    }
+
+    /**
+     * Verifica se uma faixa etária (texto) inclui uma idade.
+     * Aceita "0 a 18 anos", "59 anos ou mais", "59+", "34 a 38", etc.
+     */
+    private function faixa_inclui_idade($faixa_etaria, $idade) {
+        if (!preg_match_all('/\d+/', $faixa_etaria, $m) || empty($m[0])) {
+            return false;
+        }
+        $nums = array_map('intval', $m[0]);
+
+        if (count($nums) >= 2) {
+            return ($idade >= $nums[0] && $idade <= $nums[1]);
+        }
+
+        // Apenas um número: "X ou mais" / "X+" => X até infinito; senão idade exata
+        $lower = function_exists('mb_strtolower') ? mb_strtolower($faixa_etaria) : strtolower($faixa_etaria);
+        if (strpos($lower, 'mais') !== false || strpos($lower, 'acima') !== false || strpos($faixa_etaria, '+') !== false) {
+            return ($idade >= $nums[0]);
+        }
+        return ($idade === $nums[0]);
+    }
+
+    /**
+     * Converte "R$ 1.234,56" para número (float) aplicando desconto.
+     */
+    private function valor_para_numero_com_desconto($valor_str, $desconto) {
+        $limpo = str_replace(array('R$', ' ', '.'), '', (string) $valor_str);
+        $limpo = str_replace(',', '.', $limpo);
+        $num = floatval($limpo);
+        if ($desconto > 0) {
+            $num = $num * (1 - ($desconto / 100));
+        }
+        return $num;
+    }
+
+    /**
+     * Soma o valor mensal de uma família (lista de idades) numa tabela de faixas.
+     * Retorna null se alguma idade não tiver faixa correspondente.
+     */
+    private function calcular_total_familia($faixas, $idades, $desconto) {
+        if (empty($faixas) || empty($idades)) {
+            return null;
+        }
+        $total = 0;
+        foreach ($idades as $idade) {
+            $achou = false;
+            foreach ($faixas as $f) {
+                if (!isset($f['faixa_etaria']) || !isset($f['valor'])) {
+                    continue;
+                }
+                if ($this->faixa_inclui_idade($f['faixa_etaria'], $idade)) {
+                    $total += $this->valor_para_numero_com_desconto($f['valor'], $desconto);
+                    $achou = true;
+                    break;
+                }
+            }
+            if (!$achou) {
+                return null;
+            }
+        }
+        return $total;
+    }
+
+    /**
+     * Para a Hapvida (modo completo), encontra o MENOR total de família entre
+     * todos os planos disponíveis (ou os restritos pelos atributos).
+     */
+    private function calcular_melhor_total_hapvida($cidade, $idades, $atts) {
+        $tipos   = array('empresarial', 'individual', 'pme', 'adesao');
+        $acoms   = array('ambulatorial', 'enfermaria', 'apartamento');
+        $coparts = array('total', 'parcial');
+
+        if (!empty($atts['tipo']))           { $tipos   = array(sanitize_key($atts['tipo'])); }
+        if (!empty($atts['acomodacao']))     { $acoms   = array(sanitize_key($atts['acomodacao'])); }
+        if (!empty($atts['coparticipacao'])) { $coparts = array(sanitize_key($atts['coparticipacao'])); }
+
+        $melhor = null;
+        foreach ($tipos as $tipo) {
+            if (empty($cidade['tipos_planos_ativos'][$tipo])) {
+                continue;
+            }
+            $desconto = $this->obter_desconto_tipo($cidade, $tipo);
+            foreach ($acoms as $acom) {
+                if (empty($cidade[$tipo . '_' . $acom . '_ativo'])) {
+                    continue;
+                }
+                foreach ($coparts as $copart) {
+                    $campo = $tipo . '_' . $acom . '_' . $copart;
+                    if (empty($cidade[$campo])) {
+                        continue;
+                    }
+                    $total = $this->calcular_total_familia($cidade[$campo], $idades, $desconto);
+                    if ($total !== null && ($melhor === null || $total < $melhor)) {
+                        $melhor = $total;
+                    }
+                }
+            }
+        }
+        return $melhor;
+    }
+
+    /**
+     * Formata número como moeda brasileira (R$ 1.234,56).
+     */
+    private function formatar_moeda($num) {
+        return 'R$ ' . number_format($num, 2, ',', '.');
+    }
+
+    /**
+     * Renderiza a tabela comparativa de cotação familiar entre as operadoras.
+     */
+    public function render_tabela_comparativa($atts) {
+        $atts = shortcode_atts(array(
+            'cidade'          => '',
+            'idades'          => '35,35,5,8',
+            'tipo'            => '',
+            'acomodacao'      => '',
+            'coparticipacao'  => '',
+            'titulo_economia' => 'Economia vs Hapvida',
+        ), $atts, 'tabela_comparativa');
+
+        $slug = sanitize_title($atts['cidade']);
+        if ($slug === '') {
+            return '<em>Informe a cidade: [tabela_comparativa cidade="fortaleza"]</em>';
+        }
+
+        // Idades da família
+        $idades = array();
+        foreach (explode(',', $atts['idades']) as $i) {
+            $i = trim($i);
+            if ($i !== '' && is_numeric($i)) {
+                $idades[] = (int) $i;
+            }
+        }
+        if (empty($idades)) {
+            $idades = array(35, 35, 5, 8);
+        }
+        $qtd_pessoas = count($idades);
+
+        // Calcula o total mensal de cada operadora
+        $linhas = array();
+        foreach ($this->operadoras as $op_key => $op_info) {
+            $cidade = $this->obter_cidade_por_shortcode($op_info['prefixo'] . $slug);
+            if (!$cidade) {
+                continue;
+            }
+            $cidade['operadora'] = $op_key;
+
+            if ($this->operadora_e_simples($op_key)) {
+                $faixas   = (isset($cidade['tabela_simples']) && is_array($cidade['tabela_simples'])) ? $cidade['tabela_simples'] : array();
+                $desconto = $this->obter_desconto_simples($cidade);
+                $mensal   = $this->calcular_total_familia($faixas, $idades, $desconto);
+            } else {
+                $mensal = $this->calcular_melhor_total_hapvida($cidade, $idades, $atts);
+            }
+
+            if ($mensal === null) {
+                continue;
+            }
+
+            $linhas[$op_key] = array(
+                'nome'   => $op_info['nome'],
+                'cor'    => $op_info['cor'],
+                'mensal' => $mensal,
+                'anual'  => $mensal * 12,
+            );
+        }
+
+        if (empty($linhas)) {
+            return '<em>Não há dados cadastrados para "' . esc_html($slug) . '" nas operadoras.</em>';
+        }
+
+        // Hapvida é a base de comparação
+        $hapvida_anual = isset($linhas['hapvida']) ? $linhas['hapvida']['anual'] : null;
+
+        // Ordena: Hapvida primeiro, depois as demais (ordem da configuração)
+        $ordem = array();
+        if (isset($linhas['hapvida'])) {
+            $ordem['hapvida'] = $linhas['hapvida'];
+        }
+        foreach ($linhas as $k => $v) {
+            if ($k !== 'hapvida') {
+                $ordem[$k] = $v;
+            }
+        }
+
+        // Descrição da família
+        $desc_familia = 'Cotação para ' . $qtd_pessoas . ' vida' . ($qtd_pessoas > 1 ? 's' : '') . ' — idades: ' . implode(', ', $idades) . ' anos.';
+
+        ob_start();
+        ?>
+        <div style="overflow-x: auto; margin-bottom: 8px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 500px;">
+        <thead>
+        <tr style="background: linear-gradient(135deg,#1a1a2e,#16213e);">
+        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Operadora</th>
+        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Mensal (<?php echo (int) $qtd_pessoas; ?> pessoas)</th>
+        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Anual</th>
+        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;"><?php echo esc_html($atts['titulo_economia']); ?></th>
+        </tr>
+        </thead>
+        <tbody>
+        <?php
+        $i = 0;
+        $total_linhas = count($ordem);
+        foreach ($ordem as $op_key => $dados):
+            $ultima = ($i === $total_linhas - 1);
+            $borda = $ultima ? '' : 'border-bottom: 1px solid #f1f5f9;';
+            $is_hapvida = ($op_key === 'hapvida');
+
+            // Cor de fundo da linha
+            if ($is_hapvida) {
+                $bg = '#fff8f3';
+            } else {
+                $bg = ($i % 2 === 0) ? '#fff' : '#f8f9fa';
+            }
+
+            // Coluna economia
+            if ($is_hapvida || $hapvida_anual === null) {
+                $economia_html = '<span style="font-weight: bold; color: #1a202c;">—</span>';
+            } else {
+                $diff = $dados['anual'] - $hapvida_anual; // > 0 => operadora mais cara que Hapvida
+                if ($diff > 0) {
+                    $pct = ($dados['anual'] > 0) ? round(($diff / $dados['anual']) * 100) : 0;
+                    $economia_html = '<span style="color: #c53030; font-weight: 600;">-' . $this->formatar_moeda($diff) . ' (' . $pct . '%)</span>';
+                } elseif ($diff < 0) {
+                    $pct = ($hapvida_anual > 0) ? round((abs($diff) / $hapvida_anual) * 100) : 0;
+                    $economia_html = '<span style="color: #2f855a; font-weight: 600;">+' . $this->formatar_moeda(abs($diff)) . ' (' . $pct . '%)</span>';
+                } else {
+                    $economia_html = '<span style="color: #1a202c; font-weight: 600;">R$ 0,00</span>';
+                }
+            }
+
+            $cor_nome  = $is_hapvida ? '#ff6b00' : '#1a202c';
+            $peso_nome = $is_hapvida ? '800' : '600';
+            $cor_valor = $is_hapvida ? '#ff6b00' : '#4a5568';
+            $peso_valor = $is_hapvida ? 'bold' : 'normal';
+        ?>
+        <tr style="background: <?php echo $bg; ?>;">
+        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_nome; ?>; color: <?php echo $cor_nome; ?>;"><?php echo esc_html(strtoupper($dados['nome'])); ?></td>
+        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_valor; ?>; color: <?php echo $cor_valor; ?>;"><?php echo esc_html($this->formatar_moeda($dados['mensal'])); ?></td>
+        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_valor; ?>; color: <?php echo $cor_valor; ?>;"><?php echo esc_html($this->formatar_moeda($dados['anual'])); ?></td>
+        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px;"><?php echo $economia_html; ?></td>
+        </tr>
+        <?php
+            $i++;
+        endforeach;
+        ?>
+        </tbody>
+        </table>
+        </div>
+        <p style="font-size: 12px; color: #718096; margin: 0 0 20px 0;"><?php echo esc_html($desc_familia); ?> Valores sujeitos a alteração; consulte condições.</p>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
  * Renderiza a tabela para uma cidade específica e tipo de plano
  */
 /**
@@ -3535,6 +3809,14 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                     <li><code>[comparar_fortaleza_empresarial]</code> — mostra total e parcial.</li>
                 </ul>
                 <p style="color:#666;"><em>A cidade no shortcode de comparação é sempre o slug <strong>sem</strong> prefixo de operadora (ex.: <code>fortaleza</code>), pois ele junta todas as operadoras.</em></p>
+
+                <h3 style="margin-top: 15px;">💰 Tabela comparativa de cotação (família)</h3>
+                <p>Use <code>[tabela_comparativa cidade="fortaleza"]</code> para gerar a tabela comparando o valor mensal/anual de uma família entre as 4 operadoras, com a coluna "Economia vs Hapvida".</p>
+                <ul style="margin-left: 20px;">
+                    <li>Família padrão: <strong>2 adultos de 35 anos + filhos de 5 e 8 anos</strong>. Para mudar: <code>[tabela_comparativa cidade="fortaleza" idades="35,35,5,8"]</code>.</li>
+                    <li>Para a Hapvida, o cálculo usa automaticamente o plano mais barato. Para fixar um plano: adicione <code>tipo="empresarial" acomodacao="ambulatorial" coparticipacao="total"</code>.</li>
+                    <li>Cada idade é somada pela sua faixa etária na tabela cadastrada. A operadora só aparece se tiver a cidade e cobrir todas as idades.</li>
+                </ul>
             </div>
 
             </div><!-- /.gpp-op-panel -->
