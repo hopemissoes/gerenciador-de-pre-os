@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 6.6
+Version: 7.0
 Author: Seu Nome
 */
 
@@ -20,6 +20,10 @@ class Gerenciador_Precos_Planos {
     // Caches por request (evitam reconstruir a lista de cidades a cada shortcode)
     private $cache_cidades_global = null;
     private $indice_shortcode = null;
+
+    // Registro sob demanda: filtro de slugs ativo e slugs já registrados no request
+    private $filtro_slugs = null;          // null = registra todos; array = só estes
+    private $slugs_registrados = array();  // slug_base => true
 
     /**
      * ===== OPERADORAS =====
@@ -226,14 +230,38 @@ class Gerenciador_Precos_Planos {
             error_log('GPP: Limite de memória atual: ' . $current_limit);
         }
 
-        // Registra shortcodes de tabela, variáveis E regionais (com proteção)
-        $this->registrar_shortcodes();
-        $this->registrar_shortcodes_simples();
-        $this->registrar_shortcodes_variaveis();
+        // Shortcodes GLOBAIS (poucos, baratos) — sempre registrados.
         $this->registrar_shortcodes_regionais();
         $this->registrar_shortcodes_data();
-        $this->registrar_shortcodes_comparar();
         $this->registrar_shortcode_comparativo();
+
+        // ===== REGISTRO SOB DEMANDA (anti "limite de shortcodes") =====
+        // O WordPress monta UMA regex gigante com TODOS os shortcodes registrados.
+        // Registrar os de todas as cidades em toda página fazia essa regex crescer
+        // até falhar (seções sumindo). Agora registramos por cidade apenas quando
+        // a cidade aparece no conteúdo da página atual.
+        //
+        // Válvula de escape: para voltar ao registro de TUDO de uma vez, use:
+        //   add_filter('gpp_registrar_todos_shortcodes', '__return_true');
+        if (apply_filters('gpp_registrar_todos_shortcodes', false)) {
+            $this->registrar_shortcodes();
+            $this->registrar_shortcodes_simples();
+            $this->registrar_shortcodes_variaveis();
+            $this->registrar_shortcodes_comparar();
+        } else {
+            // Pré-registra as cidades citadas no post atual (cobre Elementor, que
+            // guarda o conteúdo em _elementor_data, e o editor clássico).
+            add_action('template_redirect', array($this, 'registrar_shortcodes_da_pagina_atual'));
+            // Rede de segurança: escaneia textos imediatamente antes do do_shortcode.
+            add_filter('the_content', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('the_excerpt', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('the_title', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('widget_text', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('widget_block_content', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('widget_title', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('elementor/frontend/the_content', array($this, 'escanear_e_registrar_passthrough'), 1);
+            add_filter('render_block', array($this, 'escanear_e_registrar_passthrough'), 1);
+        }
 
         // DEBUG: Log após registro
         if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -1547,6 +1575,11 @@ public function pagina_variaveis() {
 
         if (!empty($cidades)) {
             foreach ($cidades as $cidade_data) {
+                // Registro sob demanda: respeita o filtro de slugs.
+                if (!$this->slug_permitido($this->obter_slug_base_cidade($cidade_data))) {
+                    continue;
+                }
+
                 // Cria cópia local para evitar problemas de referência em closures
                 $cidade_local = $cidade_data;
                 $shortcode_base = $cidade_local['shortcode'];
@@ -2166,6 +2199,11 @@ public function registrar_shortcodes() {
                 continue;
             }
 
+            // Registro sob demanda: só registra os slugs filtrados (se houver filtro).
+            if (!$this->slug_permitido($this->obter_slug_base_cidade($cidade_data))) {
+                continue;
+            }
+
             $shortcode_base = $cidade_data['shortcode'];
 
             $tipos_plano = array('empresarial', 'individual', 'pme', 'adesao');
@@ -2356,6 +2394,10 @@ public function registrar_shortcodes() {
         foreach ($todas as $cidade) {
             $slug_base = $this->obter_slug_base_cidade($cidade);
             if ($slug_base === '') {
+                continue;
+            }
+            // Registro sob demanda: só os slugs filtrados.
+            if (!$this->slug_permitido($slug_base)) {
                 continue;
             }
             $slugs[$slug_base] = true;
@@ -2620,6 +2662,13 @@ public function registrar_shortcodes() {
                 if (empty($cidade['shortcode'])) {
                     continue;
                 }
+                $cidade['operadora'] = $op_key;
+
+                // Registro sob demanda: respeita o filtro de slugs.
+                if (!$this->slug_permitido($this->obter_slug_base_cidade($cidade))) {
+                    continue;
+                }
+
                 $base = $cidade['shortcode'];
 
                 // Tabela COM disclaimers
@@ -3168,7 +3217,147 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         }
         return isset($this->indice_shortcode[$shortcode_base]) ? $this->indice_shortcode[$shortcode_base] : null;
     }
-    
+
+    /**
+     * Garante que o índice de shortcodes esteja montado.
+     */
+    private function garantir_indice_shortcode() {
+        $this->obter_cidade_por_shortcode('');
+    }
+
+    // ===================================================================
+    // ===== REGISTRO SOB DEMANDA =====
+    // ===================================================================
+
+    /**
+     * Hook de filtro (pass-through): escaneia o texto e registra as cidades
+     * citadas antes do do_shortcode rodar. Retorna o texto inalterado.
+     */
+    public function escanear_e_registrar_passthrough($texto) {
+        if (is_string($texto)) {
+            $this->escanear_e_registrar($texto);
+        }
+        return $texto;
+    }
+
+    /**
+     * No carregamento da página, registra as cidades citadas no post atual.
+     * Cobre Elementor (conteúdo em _elementor_data) e o editor clássico.
+     */
+    public function registrar_shortcodes_da_pagina_atual() {
+        $post = get_queried_object();
+        if (!$post || !isset($post->ID)) {
+            return;
+        }
+
+        $blob = '';
+        if (isset($post->post_content)) { $blob .= ' ' . $post->post_content; }
+        if (isset($post->post_title))   { $blob .= ' ' . $post->post_title; }
+        if (isset($post->post_excerpt)) { $blob .= ' ' . $post->post_excerpt; }
+
+        // Conteúdo do Elementor (JSON), schema custom do plugin e campos de SEO
+        $extras = array(
+            '_elementor_data', '_gpp_schema_markup',
+            'rank_math_title', 'rank_math_description',
+            '_yoast_wpseo_title', '_yoast_wpseo_metadesc',
+        );
+        foreach ($extras as $meta_key) {
+            $valor = get_post_meta($post->ID, $meta_key, true);
+            if (is_string($valor) && $valor !== '') {
+                $blob .= ' ' . $valor;
+            }
+        }
+
+        $this->escanear_e_registrar($blob);
+    }
+
+    /**
+     * Encontra no texto os tokens de shortcode, mapeia para o slug base da
+     * cidade e registra os shortcodes apenas dessas cidades.
+     */
+    public function escanear_e_registrar($texto) {
+        if (strpos($texto, '[') === false && strpos($texto, 'comparar_') === false) {
+            return;
+        }
+        if (!preg_match_all('/\[\/?\s*([a-z0-9_\-]+)/i', $texto, $m) || empty($m[1])) {
+            return;
+        }
+
+        $slugs = array();
+        foreach (array_unique($m[1]) as $token) {
+            $token = strtolower($token);
+
+            // Comparação: [comparar_{slug}...] — o slug não tem "_" (usa hífen)
+            if (strpos($token, 'comparar_') === 0) {
+                $resto = substr($token, strlen('comparar_'));
+                $partes = explode('_', $resto);
+                if (!empty($partes[0])) {
+                    $slugs[$partes[0]] = true;
+                }
+                continue;
+            }
+
+            $slug = $this->token_para_slug($token);
+            if ($slug !== null) {
+                $slugs[$slug] = true;
+            }
+        }
+
+        if (!empty($slugs)) {
+            $this->registrar_slugs(array_keys($slugs));
+        }
+    }
+
+    /**
+     * Dado um token de shortcode (ex.: "unimed_fortaleza_emp_ambulatorialtotal_0"),
+     * descobre a qual cidade (shortcode base) ele pertence e devolve o slug base.
+     * Faz match do shortcode base MAIS LONGO (evita confundir "fortaleza" com
+     * "unimed_fortaleza").
+     */
+    private function token_para_slug($token) {
+        $this->garantir_indice_shortcode();
+        $partes = explode('_', $token);
+        for ($i = count($partes); $i >= 1; $i--) {
+            $candidato = implode('_', array_slice($partes, 0, $i));
+            if (isset($this->indice_shortcode[$candidato])) {
+                return $this->obter_slug_base_cidade($this->indice_shortcode[$candidato]);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Registra os shortcodes das cidades dos slugs informados (apenas os ainda
+     * não registrados neste request).
+     */
+    private function registrar_slugs($slugs) {
+        $novos = array();
+        foreach ($slugs as $s) {
+            if ($s !== '' && !isset($this->slugs_registrados[$s])) {
+                $this->slugs_registrados[$s] = true;
+                $novos[$s] = true;
+            }
+        }
+        if (empty($novos)) {
+            return;
+        }
+
+        // Limita as funções de registro aos slugs novos e dispara o registro.
+        $this->filtro_slugs = $novos;
+        $this->registrar_shortcodes();
+        $this->registrar_shortcodes_simples();
+        $this->registrar_shortcodes_variaveis();
+        $this->registrar_shortcodes_comparar();
+        $this->filtro_slugs = null;
+    }
+
+    /**
+     * Indica se um slug base deve ser registrado agora (respeita o filtro).
+     */
+    private function slug_permitido($slug) {
+        return ($this->filtro_slugs === null) || isset($this->filtro_slugs[$slug]);
+    }
+
     /**
      * Gera slug automático a partir do nome da cidade
      */
