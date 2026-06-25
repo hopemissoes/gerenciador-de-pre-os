@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 6.4
+Version: 6.5
 Author: Seu Nome
 */
 
@@ -1907,8 +1907,16 @@ public function pagina_variaveis() {
                             continue;
                         }
                         
-                        // Registra variável para cada faixa etária
+                        // DISPOSITIVO ANTI-SOBRECARGA: registra a variável do RankMath
+                        // apenas para a 1ª, 2ª e última faixa (mesmo critério dos
+                        // shortcodes), evitando milhares de registros e estouro de memória.
+                        $faixas_permitidas = array_flip($this->indices_faixas_registrar(count($cidade[$campo])));
+
+                        // Registra variável para cada faixa etária (limitada)
                         foreach ($cidade[$campo] as $faixa_index => $faixa_data) {
+                            if (!isset($faixas_permitidas[$faixa_index])) {
+                                continue;
+                            }
                             // Nome da variável (sem colchetes, igual ao shortcode)
                             $var_name = $cidade_slug . '_' . $tipo_sigla . '_' . $acomodacao . $coparticipacao . '_' . $faixa_index;
                             
