@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 6.5
+Version: 6.6
 Author: Seu Nome
 */
 
@@ -16,6 +16,10 @@ class Gerenciador_Precos_Planos {
     private $option_name = 'gpp_cidades_planos';
     private $settings_option = 'gpp_settings';
     private $regional_option = 'gpp_valores_regionais';
+
+    // Caches por request (evitam reconstruir a lista de cidades a cada shortcode)
+    private $cache_cidades_global = null;
+    private $indice_shortcode = null;
 
     /**
      * ===== OPERADORAS =====
@@ -101,8 +105,14 @@ class Gerenciador_Precos_Planos {
         // Registra shortcodes COM PROTEÇÃO para não registrar em requisições Elementor
         add_action('init', array($this, 'registrar_shortcodes_com_protecao'), 999);
 
-        // ===== NOVA FUNCIONALIDADE: Registra variáveis no RankMath =====
-        add_action('rank_math/vars/register', array($this, 'registrar_variaveis_rankmath'));
+        // ===== Registra variáveis no RankMath (%variavel%) =====
+        // DESLIGADO POR PADRÃO: registrava milhares de variáveis em CADA página
+        // (o RankMath dispara este gancho a cada request), consumindo muita
+        // memória mesmo quando o site usa apenas shortcodes [..]. Reative com:
+        //   add_filter('gpp_habilitar_variaveis_rankmath', '__return_true');
+        if (apply_filters('gpp_habilitar_variaveis_rankmath', false)) {
+            add_action('rank_math/vars/register', array($this, 'registrar_variaveis_rankmath'));
+        }
 
         // Enfileira estilos no frontend
         add_action('wp_enqueue_scripts', array($this, 'enfileirar_estilos_frontend'));
@@ -2150,8 +2160,14 @@ public function registrar_shortcodes() {
 
     if (!empty($cidades)) {
         foreach ($cidades as $cidade_data) {
+            // Operadoras "simples" têm seus próprios shortcodes em
+            // registrar_shortcodes_simples(); não registram tipos/menor/maior aqui.
+            if (isset($cidade_data['operadora']) && $this->operadora_e_simples($cidade_data['operadora'])) {
+                continue;
+            }
+
             $shortcode_base = $cidade_data['shortcode'];
-            
+
             $tipos_plano = array('empresarial', 'individual', 'pme', 'adesao');
             
             foreach ($tipos_plano as $tipo) {
@@ -3119,6 +3135,11 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
      * shortcodes de todas as operadoras sejam registrados de uma só vez.
      */
     private function obter_todas_cidades_global() {
+        // Cache por request: a lista é reconstruída uma única vez. Antes era
+        // remontada do zero a cada shortcode renderizado (consumo de memória/CPU).
+        if ($this->cache_cidades_global !== null) {
+            return $this->cache_cidades_global;
+        }
         $todas = array();
         foreach ($this->operadoras as $op_key => $op_info) {
             foreach ($this->obter_todas_cidades($op_key) as $cidade) {
@@ -3126,21 +3147,26 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 $todas[] = $cidade;
             }
         }
+        $this->cache_cidades_global = $todas;
         return $todas;
     }
 
     /**
      * Encontra uma cidade (de qualquer operadora) pelo seu shortcode base.
      * Como os shortcodes são globalmente únicos (operadoras não-Hapvida usam
-     * prefixo), a busca global é segura.
+     * prefixo), a busca global é segura. Usa um índice (O(1)) montado uma vez
+     * por request em vez de varrer todas as cidades a cada chamada.
      */
     private function obter_cidade_por_shortcode($shortcode_base) {
-        foreach ($this->obter_todas_cidades_global() as $c) {
-            if (isset($c['shortcode']) && $c['shortcode'] === $shortcode_base) {
-                return $c;
+        if ($this->indice_shortcode === null) {
+            $this->indice_shortcode = array();
+            foreach ($this->obter_todas_cidades_global() as $c) {
+                if (isset($c['shortcode']) && $c['shortcode'] !== '') {
+                    $this->indice_shortcode[$c['shortcode']] = $c;
+                }
             }
         }
-        return null;
+        return isset($this->indice_shortcode[$shortcode_base]) ? $this->indice_shortcode[$shortcode_base] : null;
     }
     
     /**
