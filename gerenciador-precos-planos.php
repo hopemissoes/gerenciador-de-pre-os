@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 6.3
+Version: 6.4
 Author: Seu Nome
 */
 
@@ -805,7 +805,10 @@ public function pagina_variaveis() {
                         &nbsp;|&nbsp; maior: <code class="gpp-copiar-var" data-var="[<?php echo esc_attr($base); ?>_maiorvalor]" style="cursor:pointer;">[<?php echo esc_html($base); ?>_maiorvalor]</code>
                     </p>
 
-                    <?php if (!empty($tabela)): ?>
+                    <?php if (!empty($tabela)):
+                        $idx_reg = array_flip($this->indices_faixas_registrar(count($tabela)));
+                    ?>
+                        <p style="font-size:12px; color:#718096; margin:0 0 6px;">Por desempenho, só a <strong>1ª, 2ª e última</strong> faixa têm shortcode individual. Para mostrar todas, use a tabela completa <code>[<?php echo esc_html($base); ?>]</code>.</p>
                         <table class="wp-list-table widefat fixed striped" style="max-width:700px;">
                             <thead>
                                 <tr>
@@ -817,11 +820,16 @@ public function pagina_variaveis() {
                             <tbody>
                                 <?php foreach ($tabela as $idx => $faixa):
                                     $sc_faixa = $base . '_' . $idx;
+                                    $tem_sc = isset($idx_reg[$idx]);
                                 ?>
                                     <tr>
                                         <td><strong><?php echo esc_html($faixa['faixa_etaria']); ?></strong></td>
                                         <td>
-                                            <code class="gpp-copiar-var" data-var="[<?php echo esc_attr($sc_faixa); ?>]" style="cursor:pointer;">[<?php echo esc_html($sc_faixa); ?>]</code>
+                                            <?php if ($tem_sc): ?>
+                                                <code class="gpp-copiar-var" data-var="[<?php echo esc_attr($sc_faixa); ?>]" style="cursor:pointer;">[<?php echo esc_html($sc_faixa); ?>]</code>
+                                            <?php else: ?>
+                                                <span style="color:#999;">— use <code>[<?php echo esc_html($base); ?>]</code></span>
+                                            <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo $this->formatar_preco_com_desconto($faixa['valor'], $this->obter_desconto_simples($cidade)); ?></strong></td>
                                     </tr>
@@ -2553,6 +2561,26 @@ public function registrar_shortcodes() {
     }
 
     /**
+     * DISPOSITIVO ANTI-SOBRECARGA: dada a quantidade de faixas, devolve apenas
+     * os índices que viram shortcode individual — primeira (0), segunda (1) e
+     * última (total-1). Evita registrar dezenas de shortcodes por cidade e
+     * quebrar o site (mesmo critério já usado nas variáveis da Hapvida).
+     */
+    private function indices_faixas_registrar($total) {
+        $total = (int) $total;
+        $indices = array();
+        if ($total <= 0) {
+            return $indices;
+        }
+        $indices[0] = true;            // primeira
+        if ($total > 1) {
+            $indices[1] = true;        // segunda
+        }
+        $indices[$total - 1] = true;   // última
+        return array_keys($indices);
+    }
+
+    /**
      * Registra os shortcodes das operadoras em modo "simples" (uma tabela por cidade).
      * Ex. (Unimed): [unimed_fortaleza], [unimed_fortaleza_sd],
      *               [unimed_fortaleza_menorvalor], [unimed_fortaleza_maiorvalor],
@@ -2596,11 +2624,13 @@ public function registrar_shortcodes() {
                     return ($r !== null) ? $r : 'N/A';
                 });
 
-                // Valor de cada faixa: [base_0], [base_1], ...
+                // Valor de cada faixa: [base_0], [base_1], [base_<última>]
+                // DISPOSITIVO ANTI-SOBRECARGA: registra só primeira, segunda e
+                // última faixa (igual à Hapvida), evitando quebrar o site com
+                // muitos shortcodes. A tabela completa continua em [base].
                 $tabela = (isset($cidade['tabela_simples']) && is_array($cidade['tabela_simples'])) ? $cidade['tabela_simples'] : array();
-                foreach ($tabela as $idx => $faixa) {
-                    $idx_local = $idx;
-                    add_shortcode($base . '_' . $idx, function() use ($base, $idx_local) {
+                foreach ($this->indices_faixas_registrar(count($tabela)) as $idx_local) {
+                    add_shortcode($base . '_' . $idx_local, function() use ($base, $idx_local) {
                         $c = $this->obter_cidade_por_shortcode($base);
                         if ($c && isset($c['tabela_simples'][$idx_local]['valor'])) {
                             return $this->formatar_preco_com_desconto($c['tabela_simples'][$idx_local]['valor'], $this->obter_desconto_simples($c));
@@ -3428,7 +3458,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                         $linha('Tabela sem avisos/botão', '[' . $prefixo . 'CIDADE_sd]', '[' . $cidade_ex . '_sd]');
                         $linha('Menor valor (texto)', '[' . $prefixo . 'CIDADE_menorvalor]', '[' . $cidade_ex . '_menorvalor]');
                         $linha('Maior valor (texto)', '[' . $prefixo . 'CIDADE_maiorvalor]', '[' . $cidade_ex . '_maiorvalor]');
-                        $linha('Valor de uma faixa (0,1,2…)', '[' . $prefixo . 'CIDADE_N]', '[' . $cidade_ex . '_0]');
+                        $linha('Valor de uma faixa (só 1ª, 2ª e última)', '[' . $prefixo . 'CIDADE_N]', '[' . $cidade_ex . '_0]');
                         ?>
                     </tbody>
                 </table>
