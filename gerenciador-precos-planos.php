@@ -492,6 +492,8 @@ class Gerenciador_Precos_Planos {
 
             // Só processa se for string e tiver shortcodes
             if (is_string($real_value) && !empty($real_value) && strpos($real_value, '[') !== false) {
+                // Registro sob demanda: registra as cidades citadas no meta antes.
+                $this->escanear_e_registrar($real_value);
                 $real_value = do_shortcode($real_value);
             }
 
@@ -2065,6 +2067,9 @@ public function pagina_variaveis() {
                 $data[$key] = $this->processar_shortcodes_recursivo($value);
             }
         } elseif (is_string($data) && strpos($data, '[') !== false) {
+            // Registro sob demanda: garante que as cidades citadas no schema
+            // estejam registradas antes de processar os shortcodes.
+            $this->escanear_e_registrar($data);
             $data = do_shortcode($data);
         }
         return $data;
@@ -2171,6 +2176,9 @@ public function pagina_variaveis() {
         if (empty($schema_content)) {
             return;
         }
+
+        // Registro sob demanda: registra as cidades citadas no schema antes.
+        $this->escanear_e_registrar($schema_content);
 
         // Processa os shortcodes dentro do conteúdo do schema
         $schema_processado = do_shortcode($schema_content);
