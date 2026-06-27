@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 7.0
+Version: 7.1
 Author: Seu Nome
 */
 
@@ -2624,7 +2624,7 @@ public function registrar_shortcodes() {
                 </div>
 
                 <div class="gpp-botao-container">
-                    <a href="<?php echo esc_url($operadora_cfg['url_botao']); ?>" target="_blank" class="gpp-botao-consulta">
+                    <a href="#" class="gpp-botao-consulta acao-abrir-popup">
                         Consulte as promoções de hoje
                     </a>
                 </div>
@@ -3150,7 +3150,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             </div>
 
             <div class="gpp-botao-container">
-                <a href="<?php echo esc_url($operadora_url); ?>" target="_blank" class="gpp-botao-consulta">
+                <a href="#" class="gpp-botao-consulta acao-abrir-popup">
                     Consulte as promoções de hoje
                 </a>
             </div>
