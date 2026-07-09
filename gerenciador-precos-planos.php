@@ -4080,6 +4080,120 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             /* Página de variáveis dinâmicas: chips de copiar */
             .gpp-copiar-var { cursor: pointer; }
             code.gpp-copiar-var:hover { background: #eef4fb !important; }
+
+            /* ===== ABAS INTERNAS (Cidades / Descontos / Referência / Ajuda) ===== */
+            .gpp-tabs-internas {
+                display: flex;
+                gap: 2px;
+                border-bottom: 1px solid #c3c4c7;
+                margin: 6px 0 20px;
+            }
+            .gpp-tab-int {
+                padding: 10px 18px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #646970;
+                background: none;
+                border: none;
+                border-bottom: 3px solid transparent;
+                cursor: pointer;
+                transition: color 0.15s ease, border-color 0.15s ease;
+            }
+            .gpp-tab-int:hover { color: #1d2327; }
+            .gpp-tab-int.gpp-tab-ativa {
+                color: #0054b8;
+                border-bottom-color: #0054b8;
+            }
+            .gpp-tab-int:focus-visible { outline: 2px solid #0054b8; outline-offset: 2px; }
+
+            .gpp-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin: 0 0 16px;
+                flex-wrap: wrap;
+            }
+            .gpp-busca-admin {
+                margin-left: auto;
+                min-width: 260px;
+                padding: 5px 12px;
+                border: 1px solid #8c8f94;
+                border-radius: 6px;
+            }
+
+            /* ===== BADGES (colunas Planos e Desconto) ===== */
+            .gpp-badge {
+                display: inline-block;
+                font-size: 11px;
+                font-weight: 700;
+                border-radius: 4px;
+                padding: 2px 8px;
+                margin: 1px 4px 1px 0;
+                white-space: nowrap;
+            }
+            .gpp-badge-empresarial { background: #e7f0ff; color: #1d4fa0; }
+            .gpp-badge-individual  { background: #e5f6ec; color: #187a43; }
+            .gpp-badge-pme         { background: #fff1e3; color: #b35a00; }
+            .gpp-badge-adesao      { background: #f3e9fb; color: #7239a4; }
+            .gpp-badge-simples     { background: #eef1f5; color: #475569; }
+            .gpp-badge-desc        { background: #fdeee7; color: #c2410c; }
+            .gpp-texto-vazio       { color: #a0a5aa; }
+
+            .gpp-tabela-cidades td { vertical-align: middle; }
+            .gpp-tabela-cidades .button { margin-right: 4px; }
+
+            /* ===== GAVETA DE SHORTCODES ===== */
+            .gpp-gaveta-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.4);
+                z-index: 99990;
+            }
+            .gpp-gaveta {
+                position: fixed;
+                top: 32px; /* barra do wp-admin */
+                right: 0;
+                bottom: 0;
+                width: 420px;
+                max-width: 92vw;
+                background: #fff;
+                z-index: 99991;
+                box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.45);
+                transform: translateX(105%);
+                transition: transform 0.25s ease;
+                display: flex;
+                flex-direction: column;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .gpp-gaveta { transition: none; }
+            }
+            @media screen and (max-width: 782px) {
+                .gpp-gaveta { top: 46px; } /* barra do wp-admin no mobile */
+            }
+            .gpp-gaveta.gpp-aberta { transform: none; }
+            .gpp-gaveta-cabecalho {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 16px 20px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .gpp-gaveta-fechar {
+                border: none;
+                background: none;
+                font-size: 18px;
+                line-height: 1;
+                color: #94a3b8;
+                cursor: pointer;
+                padding: 4px;
+            }
+            .gpp-gaveta-fechar:hover { color: #0f172a; }
+            .gpp-gaveta-corpo {
+                padding: 16px 20px;
+                overflow-y: auto;
+            }
+            .gpp-gaveta-corpo .gpp-bloco-sc { margin-bottom: 12px; }
         </style>
         <?php
     }
@@ -4125,7 +4239,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             <?php
         };
         ?>
-        <details class="gpp-ref-panel">
+        <details class="gpp-ref-panel" open>
             <summary style="background: linear-gradient(135deg, <?php echo esc_attr($cor); ?>, <?php echo esc_attr($this->escurecer_cor($cor, 0.25)); ?>);">
                 📚 Referência de Shortcodes — <?php echo esc_html($op['nome']); ?>
                 <?php if ($prefixo !== ''): ?>(prefixo <code style="background:rgba(255,255,255,0.25); color:#fff; padding:1px 5px; border-radius:3px;"><?php echo esc_html($prefixo); ?></code>)<?php endif; ?>
@@ -4290,64 +4404,36 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 <?php endforeach; ?>
             </h2>
 
-            <!-- ===== CONTROLES COMPARTILHADOS (operam na operadora da aba ativa) ===== -->
-            <button id="gpp-adicionar-cidade" class="button button-primary" style="margin-bottom: 20px;">Adicionar Nova Cidade em <span id="gpp-add-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></button>
-
-            <!-- ===== SISTEMA GLOBAL DE DESCONTOS ===== -->
-            <div class="gpp-card">
-                <h2 style="margin-top: 0;">⚙️ Aplicar Desconto Global em Todas as Cidades de <span id="gpp-desc-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></h2>
-                <p style="color: #666;">Configure um desconto que será aplicado em <strong>TODAS as cidades</strong> da operadora selecionada na aba acima.</p>
-
-                <div style="margin: 15px 0;">
-                    <label style="display: block; margin: 10px 0;">
-                        <input type="radio" name="gpp-tipo-desconto-global" id="gpp-desconto-15-global" value="15">
-                        Aplicar desconto de <strong>15%</strong>
-                    </label>
-
-                    <label style="display: block; margin: 10px 0;">
-                        <input type="radio" name="gpp-tipo-desconto-global" id="gpp-desconto-personalizado-global-radio" value="personalizado">
-                        Desconto personalizado:
-                        <input type="number" id="gpp-desconto-personalizado-global" min="0" max="100" step="0.01" placeholder="Ex: 20" style="width: 100px; margin-left: 10px;" disabled> %
-                    </label>
-                </div>
-
-                <div style="margin-top: 20px;">
-                    <button id="gpp-aplicar-desconto-global" class="button button-primary">Aplicar em Todas as Cidades</button>
-                    <button id="gpp-remover-todos-descontos" class="button">Remover Todos os Descontos</button>
-                </div>
+            <!-- ===== ABAS INTERNAS: Cidades / Descontos / Referência / Ajuda ===== -->
+            <div class="gpp-tabs-internas" role="tablist">
+                <button type="button" class="gpp-tab-int gpp-tab-ativa" data-tab="cidades" role="tab">Cidades</button>
+                <button type="button" class="gpp-tab-int" data-tab="descontos" role="tab">Descontos</button>
+                <button type="button" class="gpp-tab-int" data-tab="referencia" role="tab">Referência de shortcodes</button>
+                <button type="button" class="gpp-tab-int" data-tab="ajuda" role="tab">Ajuda</button>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <a href="<?php echo admin_url('admin.php?page=gpp-variaveis&operadora=' . $operadora_inicial); ?>" id="gpp-link-variaveis" class="button button-secondary">Ver Variáveis Dinâmicas</a>
-            </div>
+            <!-- ===================== ABA: CIDADES ===================== -->
+            <div class="gpp-tab-panel" data-tab="cidades">
 
-            <!-- ===== PAINÉIS POR OPERADORA (troca instantânea via JS) ===== -->
+                <div class="gpp-toolbar">
+                    <button id="gpp-adicionar-cidade" class="button button-primary">+ Adicionar cidade em <span id="gpp-add-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></button>
+                    <input type="search" id="gpp-busca-admin" class="gpp-busca-admin" placeholder="Buscar cidade…" aria-label="Buscar cidade">
+                </div>
+
             <?php foreach ($this->operadoras as $operadora_ativa => $operadora_cfg):
                 $is_simples = $this->operadora_e_simples($operadora_ativa);
                 $painel_ativo = ($operadora_ativa === $operadora_inicial);
             ?>
             <div class="gpp-op-panel" data-operadora="<?php echo esc_attr($operadora_ativa); ?>"<?php echo $painel_ativo ? '' : ' style="display:none;"'; ?>>
 
-                <div class="gpp-banner-op" style="background: linear-gradient(135deg, <?php echo esc_attr($operadora_cfg['cor']); ?>, <?php echo esc_attr($this->escurecer_cor($operadora_cfg['cor'], 0.25)); ?>);">
-                    Gerenciando operadora: <strong><?php echo esc_html($operadora_cfg['nome']); ?></strong>
-                    <?php if ($operadora_cfg['prefixo'] !== ''): ?>
-                        &nbsp;—&nbsp; prefixo dos shortcodes: <code><?php echo esc_html($operadora_cfg['prefixo']); ?></code>
-                    <?php else: ?>
-                        &nbsp;—&nbsp; shortcodes <strong>sem prefixo</strong>
-                    <?php endif; ?>
-                </div>
-
-                <?php $this->renderizar_referencia_shortcodes($operadora_ativa); ?>
-
-            <table class="wp-list-table widefat fixed striped">
+            <table class="wp-list-table widefat fixed striped gpp-tabela-cidades">
                 <thead>
                     <tr>
-                        <th style="width: 12%;">Cidade</th>
-                        <th style="width: 10%;">Shortcode Base</th>
-                        <th style="width: 48%;">Shortcodes Principais</th>
-                        <th style="width: 12%;">Tipos Ativos</th>
-                        <th style="width: 8%;">Descontos</th>
-                        <th style="width: 10%;">Ações</th>
+                        <th style="width: 20%;">Cidade</th>
+                        <th style="width: 20%;">Shortcode base</th>
+                        <th style="width: 22%;">Planos</th>
+                        <th style="width: 14%;">Desconto</th>
+                        <th style="width: 24%;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -4357,23 +4443,33 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                         foreach ($cidades as $index => $cidade) {
                             // Garante que a operadora esteja disponível para os cálculos/render
                             $cidade['operadora'] = $operadora_ativa;
-                            // Calcula info de descontos por tipo
+                            // Calcula info de descontos por tipo (vira badges na coluna Desconto)
+                            $desconto_badges = array();
                             if ($is_simples) {
                                 // Operadora simples: desconto único (global)
                                 $desc_simples = $this->obter_desconto_simples($cidade);
-                                $desconto_display = ($desc_simples > 0) ? ($desc_simples . '%') : '-';
+                                if ($desc_simples > 0) {
+                                    $desconto_badges[] = $desc_simples . '%';
+                                }
                             } else {
-                                $descontos_info = array();
                                 $tipos_check = array('empresarial' => 'Emp', 'individual' => 'Ind', 'pme' => 'PME', 'adesao' => 'Ade');
+                                $descontos_por_valor = array();
 
                                 foreach ($tipos_check as $tipo_key => $tipo_label) {
                                     $desc = $this->obter_desconto_tipo($cidade, $tipo_key);
                                     if ($desc > 0) {
-                                        $descontos_info[] = $tipo_label . ': ' . $desc . '%';
+                                        $descontos_por_valor[(string) $desc][] = $tipo_label;
                                     }
                                 }
 
-                                $desconto_display = !empty($descontos_info) ? implode('<br>', $descontos_info) : '-';
+                                // Todos os tipos com o mesmo desconto => um único badge "15%"
+                                if (count($descontos_por_valor) === 1 && count(reset($descontos_por_valor)) === count($tipos_check)) {
+                                    $desconto_badges[] = array_keys($descontos_por_valor)[0] . '%';
+                                } else {
+                                    foreach ($descontos_por_valor as $valor_desc => $labels) {
+                                        $desconto_badges[] = implode('/', $labels) . ' ' . $valor_desc . '%';
+                                    }
+                                }
                             }
                             
                             $tipos_ativos = array();
@@ -4415,10 +4511,36 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                             
                             $tipos_text = !empty($tipos_ativos) ? implode(', ', $tipos_ativos) : 'Nenhum';
                             ?>
-                            <tr>
+                            <tr data-cidade="<?php echo esc_attr(function_exists('mb_strtolower') ? mb_strtolower($cidade['nome']) : strtolower($cidade['nome'])); ?>">
                                 <td><strong><?php echo esc_html($cidade['nome']); ?></strong></td>
-                                <td><code><?php echo esc_html($cidade['shortcode']); ?></code></td>
+                                <td><code class="gpp-shortcode-item gpp-chip gpp-chip-primario" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>]" title="Clique para copiar">[<?php echo esc_html($cidade['shortcode']); ?>]</code></td>
                                 <td>
+                                    <?php if ($is_simples): ?>
+                                        <span class="gpp-badge gpp-badge-simples">Plano único</span>
+                                    <?php elseif (!empty($shortcodes_por_tipo)): ?>
+                                        <?php foreach ($shortcodes_por_tipo as $tipo_key => $tipo_data): ?>
+                                            <span class="gpp-badge gpp-badge-<?php echo esc_attr($tipo_key); ?>"><?php echo esc_html($tipo_data['nome']); ?></span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <span class="gpp-texto-vazio">Nenhum plano</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (!empty($desconto_badges)): ?>
+                                        <?php foreach ($desconto_badges as $badge_desc): ?>
+                                            <span class="gpp-badge gpp-badge-desc"><?php echo esc_html($badge_desc); ?></span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <span class="gpp-texto-vazio">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <button class="button gpp-editar-cidade" data-cidade-id="<?php echo $index; ?>">Editar</button>
+                                    <button class="button gpp-abrir-gaveta" data-alvo="gpp-sc-<?php echo esc_attr($operadora_ativa); ?>-<?php echo (int) $index; ?>" data-cidade="<?php echo esc_attr($cidade['nome']); ?>">Shortcodes ›</button>
+                                    <button class="button gpp-excluir-cidade" data-cidade-id="<?php echo $index; ?>">Excluir</button>
+
+                                    <!-- Conteúdo da gaveta de shortcodes desta cidade (oculto; o JS copia para a gaveta) -->
+                                    <div id="gpp-sc-<?php echo esc_attr($operadora_ativa); ?>-<?php echo (int) $index; ?>" class="gpp-gaveta-conteudo" hidden>
                                     <?php if ($is_simples):
                                         $slug_base_cidade = $this->obter_slug_base_cidade($cidade);
                                         $tem_tabela_simples = !empty($cidade['tabela_simples']);
@@ -4489,63 +4611,123 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                         <em>Nenhum plano cadastrado</em>
                                     <?php endif; ?>
                                     <?php endif; // fim do else ($is_simples) ?>
-                                </td>
-                                <td><?php echo $is_simples ? 'Plano único' : $tipos_text; ?></td>
-                                <td style="font-size: 11px;"><?php echo $desconto_display; ?></td>
-                                <td>
-                                    <button class="button gpp-editar-cidade" data-cidade-id="<?php echo $index; ?>">Editar</button>
-                                    <button class="button gpp-excluir-cidade" data-cidade-id="<?php echo $index; ?>">Excluir</button>
+                                    </div><!-- /.gpp-gaveta-conteudo -->
                                 </td>
                             </tr>
                             <?php
                         }
                     } else {
-                        echo '<tr><td colspan="6">Nenhuma cidade cadastrada ainda.</td></tr>';
+                        echo '<tr><td colspan="5">Nenhuma cidade cadastrada ainda.</td></tr>';
                     }
                     ?>
                 </tbody>
             </table>
-            
-            <div class="gpp-card" style="border-left: 4px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">
-                <h2>Como usar</h2>
-                <?php if ($is_simples): ?>
-                <ol>
-                    <li>Adicione ou edite cidades de <?php echo esc_html($operadora_cfg['nome']); ?></li>
-                    <li>(Opcional) Configure o desconto global da cidade (15% ou personalizado)</li>
-                    <li>Cole o JSON da <strong>tabela única</strong> (Faixa Etária → Valor)</li>
-                    <li>Copie o shortcode <code>[<?php echo esc_html($operadora_cfg['prefixo']); ?>cidade]</code> e cole na página</li>
-                </ol>
-                <?php else: ?>
-                <ol>
-                    <li>Adicione ou edite cidades</li>
-                    <li>Selecione quais tipos de planos deseja cadastrar (Empresarial, Individual, PME, Adesao)</li>
-                    <li>Configure os descontos: use o desconto global OU configure descontos específicos por tipo de plano</li>
-                    <li>Para cada tipo, selecione quais acomodações (Ambulatorial, Enfermaria, Apartamento)</li>
-                    <li>Configure os preços usando JSON nos campos que aparecerem</li>
-                    <li>Copie o shortcode e cole na página</li>
-                </ol>
-                <?php endif; ?>
-                <h3 style="margin-top: 15px;">⚖️ Comparar operadoras na mesma página</h3>
-                <p>Use o shortcode <code>[comparar_CIDADE_TIPO_total]</code> para exibir as tabelas de <strong>todas as operadoras</strong> que têm aquela cidade, lado a lado (responsivo). Exemplos:</p>
-                <ul style="margin-left: 20px;">
-                    <li><code>[comparar_fortaleza_empresarial_total]</code> — compara a coparticipação total empresarial em Fortaleza entre Hapvida, Amil, Unimed e SulAmérica.</li>
-                    <li><code>[comparar_fortaleza_empresarial_parcial]</code> — versão parcial.</li>
-                    <li><code>[comparar_fortaleza_empresarial]</code> — mostra total e parcial.</li>
-                </ul>
-                <p style="color:#666;"><em>A cidade no shortcode de comparação é sempre o slug <strong>sem</strong> prefixo de operadora (ex.: <code>fortaleza</code>), pois ele junta todas as operadoras.</em></p>
-
-                <h3 style="margin-top: 15px;">💰 Tabela comparativa de cotação (família)</h3>
-                <p>Use <code>[tabela_comparativa cidade="fortaleza"]</code> para gerar a tabela comparando o valor mensal/anual de uma família entre as 4 operadoras, com a coluna "Economia vs Hapvida".</p>
-                <ul style="margin-left: 20px;">
-                    <li>Família padrão: <strong>2 adultos de 35 anos + filhos de 5 e 8 anos</strong>. Para mudar: <code>[tabela_comparativa cidade="fortaleza" idades="35,35,5,8"]</code>.</li>
-                    <li>Para a Hapvida, o cálculo usa automaticamente o plano mais barato. Para fixar um plano: adicione <code>tipo="empresarial" acomodacao="ambulatorial" coparticipacao="total"</code>.</li>
-                    <li>Cada idade é somada pela sua faixa etária na tabela cadastrada. A operadora só aparece se tiver a cidade e cobrir todas as idades.</li>
-                </ul>
-            </div>
 
             </div><!-- /.gpp-op-panel -->
             <?php endforeach; ?>
+
+            </div><!-- /aba cidades -->
+
+            <!-- ===================== ABA: DESCONTOS ===================== -->
+            <div class="gpp-tab-panel" data-tab="descontos" style="display:none;">
+                <div class="gpp-card" style="max-width: 560px;">
+                    <h2 style="margin-top: 0;">⚙️ Desconto global — <span id="gpp-desc-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></h2>
+                    <p style="color: #666;">Aplica em <strong>todas as cidades</strong> da operadora selecionada na aba de cima. Descontos individuais por cidade continuam no formulário de edição.</p>
+
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin: 10px 0;">
+                            <input type="radio" name="gpp-tipo-desconto-global" id="gpp-desconto-15-global" value="15">
+                            Aplicar desconto de <strong>15%</strong>
+                        </label>
+
+                        <label style="display: block; margin: 10px 0;">
+                            <input type="radio" name="gpp-tipo-desconto-global" id="gpp-desconto-personalizado-global-radio" value="personalizado">
+                            Desconto personalizado:
+                            <input type="number" id="gpp-desconto-personalizado-global" min="0" max="100" step="0.01" placeholder="Ex: 20" style="width: 100px; margin-left: 10px;" disabled> %
+                        </label>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button id="gpp-aplicar-desconto-global" class="button button-primary">Aplicar em todas as cidades</button>
+                        <button id="gpp-remover-todos-descontos" class="button">Remover todos os descontos</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===================== ABA: REFERÊNCIA ===================== -->
+            <div class="gpp-tab-panel" data-tab="referencia" style="display:none;">
+                <div class="gpp-toolbar">
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=gpp-variaveis&operadora=' . $operadora_inicial)); ?>" id="gpp-link-variaveis" class="button button-secondary">Ver Variáveis Dinâmicas (todas as faixas)</a>
+                </div>
+                <?php foreach ($this->operadoras as $operadora_ativa => $operadora_cfg):
+                    $painel_ativo = ($operadora_ativa === $operadora_inicial);
+                ?>
+                <div class="gpp-op-panel" data-operadora="<?php echo esc_attr($operadora_ativa); ?>"<?php echo $painel_ativo ? '' : ' style="display:none;"'; ?>>
+                    <?php $this->renderizar_referencia_shortcodes($operadora_ativa); ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- ===================== ABA: AJUDA ===================== -->
+            <div class="gpp-tab-panel" data-tab="ajuda" style="display:none;">
+                <?php foreach ($this->operadoras as $operadora_ativa => $operadora_cfg):
+                    $is_simples = $this->operadora_e_simples($operadora_ativa);
+                    $painel_ativo = ($operadora_ativa === $operadora_inicial);
+                ?>
+                <div class="gpp-op-panel" data-operadora="<?php echo esc_attr($operadora_ativa); ?>"<?php echo $painel_ativo ? '' : ' style="display:none;"'; ?>>
+                <div class="gpp-card" style="border-left: 4px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">
+                    <h2>Como usar — <?php echo esc_html($operadora_cfg['nome']); ?></h2>
+                    <?php if ($is_simples): ?>
+                    <ol>
+                        <li>Adicione ou edite cidades de <?php echo esc_html($operadora_cfg['nome']); ?></li>
+                        <li>(Opcional) Configure o desconto global da cidade (15% ou personalizado)</li>
+                        <li>Cole o JSON da <strong>tabela única</strong> (Faixa Etária → Valor)</li>
+                        <li>Copie o shortcode <code>[<?php echo esc_html($operadora_cfg['prefixo']); ?>cidade]</code> e cole na página</li>
+                    </ol>
+                    <?php else: ?>
+                    <ol>
+                        <li>Adicione ou edite cidades</li>
+                        <li>Selecione quais tipos de planos deseja cadastrar (Empresarial, Individual, PME, Adesao)</li>
+                        <li>Configure os descontos: use o desconto global OU configure descontos específicos por tipo de plano</li>
+                        <li>Para cada tipo, selecione quais acomodações (Ambulatorial, Enfermaria, Apartamento)</li>
+                        <li>Configure os preços usando JSON nos campos que aparecerem</li>
+                        <li>Copie o shortcode e cole na página</li>
+                    </ol>
+                    <?php endif; ?>
+                    <h3 style="margin-top: 15px;">⚖️ Comparar operadoras na mesma página</h3>
+                    <p>Use o shortcode <code>[comparar_CIDADE_TIPO_total]</code> para exibir as tabelas de <strong>todas as operadoras</strong> que têm aquela cidade, lado a lado (responsivo). Exemplos:</p>
+                    <ul style="margin-left: 20px;">
+                        <li><code>[comparar_fortaleza_empresarial_total]</code> — compara a coparticipação total empresarial em Fortaleza entre Hapvida, Amil, Unimed e SulAmérica.</li>
+                        <li><code>[comparar_fortaleza_empresarial_parcial]</code> — versão parcial.</li>
+                        <li><code>[comparar_fortaleza_empresarial]</code> — mostra total e parcial.</li>
+                    </ul>
+                    <p style="color:#666;"><em>A cidade no shortcode de comparação é sempre o slug <strong>sem</strong> prefixo de operadora (ex.: <code>fortaleza</code>), pois ele junta todas as operadoras.</em></p>
+
+                    <h3 style="margin-top: 15px;">💰 Tabela comparativa de cotação (família)</h3>
+                    <p>Use <code>[tabela_comparativa cidade="fortaleza"]</code> para gerar a tabela comparando o valor mensal/anual de uma família entre as 4 operadoras, com a coluna "Economia vs Hapvida".</p>
+                    <ul style="margin-left: 20px;">
+                        <li>Família padrão: <strong>2 adultos de 35 anos + filhos de 5 e 8 anos</strong>. Para mudar: <code>[tabela_comparativa cidade="fortaleza" idades="35,35,5,8"]</code>.</li>
+                        <li>Para a Hapvida, o cálculo usa automaticamente o plano mais barato. Para fixar um plano: adicione <code>tipo="empresarial" acomodacao="ambulatorial" coparticipacao="total"</code>.</li>
+                        <li>Cada idade é somada pela sua faixa etária na tabela cadastrada. A operadora só aparece se tiver a cidade e cobrir todas as idades.</li>
+                    </ul>
+                </div>
+                </div><!-- /.gpp-op-panel -->
+                <?php endforeach; ?>
+            </div>
         </div>
+
+        <!-- ===== GAVETA DE SHORTCODES (abre pela aba Cidades) ===== -->
+        <div id="gpp-gaveta-overlay" class="gpp-gaveta-overlay" style="display:none;"></div>
+        <aside id="gpp-gaveta" class="gpp-gaveta" aria-hidden="true">
+            <div class="gpp-gaveta-cabecalho">
+                <div>
+                    <h2 id="gpp-gaveta-titulo" style="margin: 0; font-size: 16px;"></h2>
+                    <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">Clique em um shortcode para copiar</p>
+                </div>
+                <button type="button" id="gpp-gaveta-fechar" class="gpp-gaveta-fechar" aria-label="Fechar">✕</button>
+            </div>
+            <div id="gpp-gaveta-corpo" class="gpp-gaveta-corpo"></div>
+        </aside>
 
         <!-- Modal -->
         <div id="gpp-modal" class="gpp-modal" style="display: none;">
@@ -4766,6 +4948,12 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 }
             }
 
+            // Fecha a gaveta de shortcodes
+            function gppFecharGaveta() {
+                $('#gpp-gaveta').removeClass('gpp-aberta').attr('aria-hidden', 'true');
+                $('#gpp-gaveta-overlay').hide();
+            }
+
             // Troca de operadora SEM recarregar a página
             function gppTrocarOperadora(op) {
                 if (!GPP_OPS[op]) { return; }
@@ -4781,6 +4969,11 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 $('#gpp-add-op-nome, #gpp-desc-op-nome').text(GPP_OPS[op].nome);
                 $('#gpp-link-variaveis').attr('href', GPP_URL_VARIAVEIS + op);
 
+                // Reseta busca e fecha a gaveta ao trocar de operadora
+                $('#gpp-busca-admin').val('');
+                $('.gpp-tabela-cidades tbody tr').show();
+                gppFecharGaveta();
+
                 if (window.history && window.history.replaceState) {
                     window.history.replaceState(null, '', GPP_URL_ADMIN + op);
                 }
@@ -4789,6 +4982,40 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             $('.gpp-op-tab').on('click', function(e) {
                 e.preventDefault();
                 gppTrocarOperadora($(this).data('operadora'));
+            });
+
+            // ===== ABAS INTERNAS (Cidades / Descontos / Referência / Ajuda) =====
+            $('.gpp-tab-int').on('click', function() {
+                var alvo = $(this).data('tab');
+                $('.gpp-tab-int').removeClass('gpp-tab-ativa');
+                $(this).addClass('gpp-tab-ativa');
+                $('.gpp-tab-panel').hide();
+                $('.gpp-tab-panel[data-tab="' + alvo + '"]').show();
+                gppFecharGaveta();
+            });
+
+            // ===== BUSCA DE CIDADES =====
+            $('#gpp-busca-admin').on('input', function() {
+                var termo = $(this).val().toLowerCase().trim();
+                $('.gpp-tabela-cidades tbody tr').each(function() {
+                    var nome = ($(this).data('cidade') || '').toString();
+                    $(this).toggle(termo === '' || nome.indexOf(termo) !== -1);
+                });
+            });
+
+            // ===== GAVETA DE SHORTCODES =====
+            $(document).on('click', '.gpp-abrir-gaveta', function() {
+                var conteudo = document.getElementById($(this).data('alvo'));
+                if (!conteudo) { return; }
+                $('#gpp-gaveta-titulo').text($(this).data('cidade'));
+                $('#gpp-gaveta-corpo').html(conteudo.innerHTML);
+                $('#gpp-gaveta').addClass('gpp-aberta').attr('aria-hidden', 'false');
+                $('#gpp-gaveta-overlay').show();
+            });
+
+            $('#gpp-gaveta-fechar, #gpp-gaveta-overlay').on('click', gppFecharGaveta);
+            $(document).on('keydown', function(e) {
+                if (e.key === 'Escape') { gppFecharGaveta(); }
             });
 
             // ===== SISTEMA GLOBAL DE DESCONTOS =====
