@@ -448,7 +448,7 @@ trait GPP_Admin {
                                 </label>
                                 <p class="description">Se marcado, você poderá configurar descontos específicos para cada tipo de plano</p>
                                 
-                                <div id="gpp-descontos-diferenciados-container" style="display: none; margin-top: 15px; padding: 15px; background: #f0f0f0; border-radius: 5px;">
+                                <div id="gpp-descontos-diferenciados-container" style="display: none; margin-top: 15px; padding: 15px; background: #fff7e8; border: 1px solid #f0dcb4; border-radius: 10px;">
                                     <p><strong>Configure os descontos específicos por tipo:</strong></p>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
                                         <div>
@@ -477,19 +477,19 @@ trait GPP_Admin {
                             <th><label>Tipos de Planos</label></th>
                             <td>
                                 <p><strong>Selecione quais tipos de planos esta cidade terá:</strong></p>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula" style="--gpp-accent:#0066FF;">
                                     <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="empresarial" id="gpp-tipo-empresarial">
                                     📈 Empresarial
                                 </label>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula" style="--gpp-accent:#00A344;">
                                     <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="individual" id="gpp-tipo-individual">
                                     👤 Individual
                                 </label>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula" style="--gpp-accent:#FF6600;">
                                     <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="pme" id="gpp-tipo-pme">
                                     🏢 PME
                                 </label>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula" style="--gpp-accent:#8E44AD;">
                                     <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="adesao" id="gpp-tipo-adesao">
                                     🤝 Adesao
                                 </label>
@@ -555,15 +555,15 @@ trait GPP_Admin {
 
                             <div style="margin: 15px 0; padding: 15px;">
                                 <p><strong>Selecione as acomodações disponíveis:</strong></p>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula">
                                     <input type="checkbox" class="gpp-acomodacao-check" data-tipo="<?php echo $tipo_key; ?>" data-acomodacao="ambulatorial">
                                     🏥 Ambulatorial
                                 </label>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula">
                                     <input type="checkbox" class="gpp-acomodacao-check" data-tipo="<?php echo $tipo_key; ?>" data-acomodacao="enfermaria">
                                     🛏️ Enfermaria
                                 </label>
-                                <label style="display: block; margin: 5px 0;">
+                                <label class="gpp-check-pilula">
                                     <input type="checkbox" class="gpp-acomodacao-check" data-tipo="<?php echo $tipo_key; ?>" data-acomodacao="apartamento">
                                     🏨 Apartamento
                                 </label>
@@ -2305,16 +2305,29 @@ public function pagina_variaveis() {
                 overflow-y: auto;
                 box-shadow: 0 24px 64px -24px rgba(15, 23, 42, 0.5);
             }
+            /* Faixa de título colorida no topo do modal */
+            #gpp-modal-titulo {
+                background: linear-gradient(135deg, #0054b8, #003d87);
+                color: #fff;
+                margin: -28px -32px 20px;
+                padding: 16px 32px;
+                border-radius: 14px 14px 0 0;
+                font-size: 18px;
+                font-weight: 600;
+            }
             .gpp-modal-close {
-                color: #94a3b8;
                 float: right;
+                position: relative;
+                z-index: 5;
+                margin: -12px -12px 0 0;
+                color: rgba(255, 255, 255, 0.85);
                 font-size: 26px;
                 font-weight: bold;
                 line-height: 1;
                 cursor: pointer;
             }
             .gpp-modal-close:hover,
-            .gpp-modal-close:focus { color: #0f172a; }
+            .gpp-modal-close:focus { color: #fff; }
 
             /* ===== SEÇÕES DO FORMULÁRIO (por tipo de plano) ===== */
             .gpp-secao-tipo,
@@ -2337,23 +2350,30 @@ public function pagina_variaveis() {
             #gpp-secao-simples h3 {
                 color: var(--gpp-accent);
                 margin-top: 0;
-                border-bottom: 2px solid #eef2f7;
+                border-bottom: 2px solid var(--gpp-accent);
                 padding-bottom: 10px;
             }
             .gpp-secao-tipo > div {
-                background: #f8fafc;
-                border: 1px solid #eef2f7;
+                background: rgba(255, 255, 255, 0.75);
+                border: 1px solid var(--gpp-borda, #eef2f7);
                 border-radius: 10px;
             }
             .gpp-secao-tipo label { color: #1e293b; }
             .gpp-secao-tipo label:hover { color: var(--gpp-accent); }
 
             .gpp-campos-acomodacao {
-                background: #f8fafc;
-                border: 1px solid #eef2f7;
+                background: rgba(255, 255, 255, 0.75);
+                border: 1px solid var(--gpp-borda, #eef2f7);
                 border-left: 3px solid var(--gpp-accent, #2271b1);
                 border-radius: 10px;
             }
+
+            /* Fundos tintados por tipo de plano (adeus tela toda branca) */
+            #gpp-secao-empresarial { background: #eff5ff; --gpp-borda: #cfdff7; }
+            #gpp-secao-individual  { background: #eefaf3; --gpp-borda: #c8ead6; }
+            #gpp-secao-pme         { background: #fff4ea; --gpp-borda: #f6ddc2; }
+            #gpp-secao-adesao      { background: #f8f0fc; --gpp-borda: #e5cff2; }
+            #gpp-secao-simples     { background: #f0f4f8; --gpp-borda: #d5dee8; }
             .gpp-campos-acomodacao h4 {
                 color: var(--gpp-accent, #2271b1);
                 font-size: 15px;
@@ -2561,6 +2581,34 @@ public function pagina_variaveis() {
                 overflow-y: auto;
             }
             .gpp-gaveta-corpo .gpp-bloco-sc { margin-bottom: 12px; }
+
+            /* ===== CHECKBOXES EM PÍLULA (tipos e acomodações) ===== */
+            .gpp-check-pilula {
+                display: inline-flex !important;
+                align-items: center;
+                gap: 7px;
+                border: 1px solid #cbd5e1;
+                border-radius: 999px;
+                background: #fff;
+                padding: 7px 16px 7px 12px;
+                margin: 3px 8px 3px 0 !important;
+                font-size: 13px;
+                font-weight: 600;
+                color: #334155;
+                cursor: pointer;
+                transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .gpp-check-pilula:hover {
+                border-color: var(--gpp-accent, #2271b1);
+                color: var(--gpp-accent, #2271b1);
+            }
+            .gpp-check-pilula:has(input:checked) {
+                background: var(--gpp-accent, #2271b1);
+                border-color: var(--gpp-accent, #2271b1);
+                color: #fff !important;
+                box-shadow: 0 4px 10px -4px var(--gpp-accent, #2271b1);
+            }
+            .gpp-check-pilula input { margin: 0 !important; }
 
             /* ===== ABAS DE TIPOS DE PLANO (modal de cidade) ===== */
             .gpp-tipos-tabs {
