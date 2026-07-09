@@ -497,6 +497,17 @@ trait GPP_Admin {
                         </tr>
                     </table>
 
+                    <!-- ===== ABAS DOS TIPOS DE PLANO (modo completo) =====
+                         Cada tipo marcado acima vira uma aba; edita-se UM tipo
+                         de cada vez, em vez de todos empilhados na mesma tela. -->
+                    <div id="gpp-tipos-tabs" class="gpp-tipos-tabs" style="display:none;">
+                        <span class="gpp-tipos-tabs-rotulo">Editando plano:</span>
+                        <button type="button" class="gpp-tab-tipo" data-tipo="empresarial" style="display:none; --gpp-accent:#0066FF;">📈 Empresarial</button>
+                        <button type="button" class="gpp-tab-tipo" data-tipo="individual" style="display:none; --gpp-accent:#00A344;">👤 Individual</button>
+                        <button type="button" class="gpp-tab-tipo" data-tipo="pme" style="display:none; --gpp-accent:#FF6600;">🏢 PME</button>
+                        <button type="button" class="gpp-tab-tipo" data-tipo="adesao" style="display:none; --gpp-accent:#8E44AD;">🤝 Adesão</button>
+                    </div>
+
                     <!-- ===== MODO SIMPLES: tabela única (Faixa Etária → Valor) ===== -->
                     <div id="gpp-secao-simples" style="display:none;">
                         <h3>🧾 Tabela de Preços — <span id="gpp-simples-op-nome"></span></h3>
@@ -649,6 +660,7 @@ trait GPP_Admin {
                 if (simples) {
                     $('.gpp-row-completo').hide();
                     $('.gpp-secao-tipo').hide();
+                    $('#gpp-tipos-tabs').hide();
                     $('#gpp-secao-simples').show();
                     if (GPP_OPS[GPP_OPERADORA]) {
                         $('#gpp-simples-op-nome').text(GPP_OPS[GPP_OPERADORA].nome);
@@ -656,9 +668,56 @@ trait GPP_Admin {
                 } else {
                     $('.gpp-row-completo').show();
                     $('#gpp-secao-simples').hide();
-                    // As seções de tipo permanecem controladas pelos checkboxes
+                    // As seções de tipo são controladas pelas abas (gppAtualizarTabsTipos)
+                    gppAtualizarTabsTipos();
                 }
             }
+
+            // ===== ABAS DE TIPOS DE PLANO NO MODAL =====
+            // Um tipo de cada vez na tela; a barra de abas reflete os
+            // checkboxes de "Tipos de Planos".
+            var GPP_TIPOS = ['empresarial', 'individual', 'pme', 'adesao'];
+
+            function gppTiposMarcados() {
+                return GPP_TIPOS.filter(function (t) {
+                    return $('#gpp-tipo-' + t).is(':checked');
+                });
+            }
+
+            function gppAtualizarTabsTipos(tipoPreferido) {
+                if (GPP_SIMPLES) {
+                    $('#gpp-tipos-tabs').hide();
+                    return;
+                }
+                var marcados = gppTiposMarcados();
+
+                // cada aba só aparece se o tipo estiver marcado
+                GPP_TIPOS.forEach(function (t) {
+                    $('.gpp-tab-tipo[data-tipo="' + t + '"]').toggle(marcados.indexOf(t) !== -1);
+                });
+
+                if (!marcados.length) {
+                    $('#gpp-tipos-tabs').hide();
+                    $('.gpp-secao-tipo').hide();
+                    return;
+                }
+                $('#gpp-tipos-tabs').show();
+
+                // decide qual aba fica ativa
+                var ativo = (tipoPreferido && marcados.indexOf(tipoPreferido) !== -1)
+                    ? tipoPreferido
+                    : ($('.gpp-tab-tipo.gpp-tab-tipo-ativa').data('tipo') || marcados[0]);
+                if (marcados.indexOf(ativo) === -1) { ativo = marcados[0]; }
+
+                $('.gpp-tab-tipo').removeClass('gpp-tab-tipo-ativa');
+                $('.gpp-tab-tipo[data-tipo="' + ativo + '"]').addClass('gpp-tab-tipo-ativa');
+                $('.gpp-secao-tipo').hide();
+                $('#gpp-secao-' + ativo).show();
+            }
+
+            $(document).on('click', '.gpp-tab-tipo', function () {
+                gppAtualizarTabsTipos($(this).data('tipo'));
+            });
 
             // Fecha a gaveta de shortcodes
             function gppFecharGaveta() {
@@ -836,17 +895,17 @@ trait GPP_Admin {
                 }, 1500);
             });
             
-            // Controle dos tipos de planos
+            // Controle dos tipos de planos (agora via abas: um tipo por vez na tela)
             $('.gpp-tipo-plano-check').on('change', function() {
                 var tipo = $(this).data('tipo');
-                var secao = $('#gpp-secao-' + tipo);
-                
+
                 if ($(this).is(':checked')) {
-                    secao.slideDown(300);
+                    // abre direto na aba do tipo recém-marcado
+                    gppAtualizarTabsTipos(tipo);
                 } else {
-                    secao.slideUp(300);
-                    // Desmarca todas as acomodações
-                    secao.find('.gpp-acomodacao-check').prop('checked', false).trigger('change');
+                    // Desmarca todas as acomodações do tipo desativado
+                    $('#gpp-secao-' + tipo).find('.gpp-acomodacao-check').prop('checked', false).trigger('change');
+                    gppAtualizarTabsTipos();
                 }
             });
             
@@ -1142,7 +1201,6 @@ trait GPP_Admin {
                             tipos.forEach(function(tipo) {
                                 if (cidade.tipos_planos_ativos && cidade.tipos_planos_ativos[tipo]) {
                                     $('#gpp-tipo-' + tipo).prop('checked', true);
-                                    $('#gpp-secao-' + tipo).show();
 
                                     // Preenche a nota/observação do plano
                                     $('#gpp-nota-' + tipo).val(cidade[tipo + '_nota'] || '');
@@ -1170,12 +1228,14 @@ trait GPP_Admin {
                             
                             $('.gpp-reajuste-desfazer').hide();
                             gppAtualizarTodosEditores();
+                            // Ativa a aba do primeiro tipo marcado (edição separada por tipo)
+                            gppAtualizarTabsTipos();
                             modal.show();
                         }
                     }
                 });
             });
-            
+
             // Fechar modal
             $('.gpp-modal-close, .gpp-cancelar').on('click', function() {
                 modal.hide();
@@ -2501,6 +2561,51 @@ public function pagina_variaveis() {
                 overflow-y: auto;
             }
             .gpp-gaveta-corpo .gpp-bloco-sc { margin-bottom: 12px; }
+
+            /* ===== ABAS DE TIPOS DE PLANO (modal de cidade) ===== */
+            .gpp-tipos-tabs {
+                position: sticky;
+                top: -28px; /* compensa o padding do modal para grudar no topo */
+                z-index: 20;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+                background: #fff;
+                padding: 12px 0;
+                margin: 8px 0 4px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .gpp-tipos-tabs-rotulo {
+                font-size: 12px;
+                font-weight: 600;
+                color: #64748b;
+                margin-right: 4px;
+            }
+            .gpp-tab-tipo {
+                border: 1px solid #cbd5e1;
+                background: #f8fafc;
+                color: #1e293b;
+                border-radius: 999px;
+                padding: 6px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+            }
+            .gpp-tab-tipo:hover {
+                border-color: var(--gpp-accent, #2271b1);
+                color: var(--gpp-accent, #2271b1);
+            }
+            .gpp-tab-tipo.gpp-tab-tipo-ativa {
+                background: var(--gpp-accent, #2271b1);
+                border-color: var(--gpp-accent, #2271b1);
+                color: #fff;
+            }
+            .gpp-tab-tipo:focus-visible {
+                outline: 2px solid var(--gpp-accent, #2271b1);
+                outline-offset: 2px;
+            }
 
             /* ===== EDITOR JSON DINÂMICO (modal de cidade) ===== */
             .gpp-editor-json { margin-bottom: 4px; }
