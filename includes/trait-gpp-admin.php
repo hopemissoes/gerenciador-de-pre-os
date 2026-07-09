@@ -500,13 +500,26 @@ trait GPP_Admin {
                     <!-- ===== MODO SIMPLES: tabela única (Faixa Etária → Valor) ===== -->
                     <div id="gpp-secao-simples" style="display:none;">
                         <h3>🧾 Tabela de Preços — <span id="gpp-simples-op-nome"></span></h3>
-                        <p>Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores:</p>
-                        <label style="display:block; font-weight:bold; margin-bottom:6px;">JSON da tabela</label>
-                        <textarea class="gpp-json-field large-text code" id="gpp-tabela-simples-json" rows="10" placeholder='[
+                        <p>Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores — a pré-visualização se monta sozinha:</p>
+                        <div class="gpp-editor-json">
+                            <div class="gpp-editor-toolbar">
+                                <label style="font-weight:bold;">JSON da tabela</label>
+                                <span class="gpp-editor-ferramentas">
+                                    <button type="button" class="button button-small gpp-json-formatar" title="Reindenta o JSON colado">{ } Formatar</button>
+                                    <span class="gpp-reajuste">
+                                        Reajuste <input type="text" class="gpp-reajuste-pct" placeholder="7,5" aria-label="Percentual de reajuste"> %
+                                        <button type="button" class="button button-small gpp-reajuste-aplicar">Aplicar</button>
+                                        <button type="button" class="button button-small gpp-reajuste-desfazer" style="display:none;">↩ Desfazer</button>
+                                    </span>
+                                </span>
+                            </div>
+                            <textarea class="gpp-json-field large-text code" id="gpp-tabela-simples-json" rows="10" placeholder='[
   {"faixa_etaria": "0 a 18 anos", "valor": "199,90"},
   {"faixa_etaria": "19 a 23 anos", "valor": "229,90"}
 ]'></textarea>
-                        <div class="gpp-status-json" id="gpp-status-tabela-simples"></div>
+                            <div class="gpp-status-json" id="gpp-status-tabela-simples"></div>
+                            <div class="gpp-json-preview" aria-live="polite"></div>
+                        </div>
                     </div>
 
                     <!-- Seções para cada tipo de plano -->
@@ -560,15 +573,41 @@ trait GPP_Admin {
                                     
                                     <div class="gpp-campos-wrapper">
                                         <div class="gpp-campo-total">
-                                            <label><strong>Coparticipação Total</strong></label>
-                                            <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total-json" rows="6"></textarea>
-                                            <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total"></div>
+                                            <div class="gpp-editor-json">
+                                                <div class="gpp-editor-toolbar">
+                                                    <label><strong>Coparticipação Total</strong></label>
+                                                    <span class="gpp-editor-ferramentas">
+                                                        <button type="button" class="button button-small gpp-json-formatar" title="Reindenta o JSON colado">{ }</button>
+                                                        <span class="gpp-reajuste">
+                                                            <input type="text" class="gpp-reajuste-pct" placeholder="7,5" aria-label="Percentual de reajuste"> %
+                                                            <button type="button" class="button button-small gpp-reajuste-aplicar">Reajustar</button>
+                                                            <button type="button" class="button button-small gpp-reajuste-desfazer" style="display:none;">↩</button>
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                                <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total-json" rows="6"></textarea>
+                                                <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total"></div>
+                                                <div class="gpp-json-preview" aria-live="polite"></div>
+                                            </div>
                                         </div>
-                                        
+
                                         <div class="gpp-campo-parcial">
-                                            <label><strong>Coparticipação Parcial</strong></label>
-                                            <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial-json" rows="6"></textarea>
-                                            <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial"></div>
+                                            <div class="gpp-editor-json">
+                                                <div class="gpp-editor-toolbar">
+                                                    <label><strong>Coparticipação Parcial</strong></label>
+                                                    <span class="gpp-editor-ferramentas">
+                                                        <button type="button" class="button button-small gpp-json-formatar" title="Reindenta o JSON colado">{ }</button>
+                                                        <span class="gpp-reajuste">
+                                                            <input type="text" class="gpp-reajuste-pct" placeholder="7,5" aria-label="Percentual de reajuste"> %
+                                                            <button type="button" class="button button-small gpp-reajuste-aplicar">Reajustar</button>
+                                                            <button type="button" class="button button-small gpp-reajuste-desfazer" style="display:none;">↩</button>
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                                <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial-json" rows="6"></textarea>
+                                                <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial"></div>
+                                                <div class="gpp-json-preview" aria-live="polite"></div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -824,46 +863,152 @@ trait GPP_Admin {
                 }
             });
             
-            // Validação JSON em tempo real
-            $('.gpp-json-field').on('input', function() {
-                var id = $(this).attr('id');
-                var statusId = id.replace('-json', '').replace(/^gpp-/, 'gpp-status-');
-                var statusDiv = $('#' + statusId);
-                var valor = $(this).val().trim();
-                
-                if (valor === '') {
+            // ===== EDITOR JSON DINÂMICO (validação + pré-visualização ao vivo) =====
+
+            // Converte "1.234,56" / "1234.56" / "R$ 199,90" em número
+            function gppParaNumero(txt) {
+                txt = String(txt == null ? '' : txt).replace(/[^0-9.,]/g, '');
+                if (txt === '') { return NaN; }
+                if (txt.indexOf(',') !== -1) {
+                    txt = txt.replace(/\./g, '').replace(',', '.');
+                } else if ((txt.match(/\./g) || []).length > 1) {
+                    txt = txt.replace(/\./g, '');
+                }
+                return parseFloat(txt);
+            }
+
+            // Formata número como "1.234,56" (padrão brasileiro, sem R$)
+            function gppParaMoeda(n) {
+                return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Extrai o valor de um item (aceita os 3 formatos que o plugin aceita)
+            function gppValorDoItem(item) {
+                return item.valor || item.coparticipacao_total || item.coparticipacao_parcial || '';
+            }
+
+            // Valida o JSON e devolve {dados} ou {erro}
+            function gppValidarJson(texto) {
+                if (texto.trim() === '') { return { vazio: true }; }
+                var dados;
+                try {
+                    dados = JSON.parse(texto);
+                } catch (e) {
+                    return { erro: e.message };
+                }
+                if (!Array.isArray(dados)) {
+                    return { erro: 'JSON deve ser um array' };
+                }
+                for (var i = 0; i < dados.length; i++) {
+                    var item = dados[i];
+                    if (!item || typeof item !== 'object' || !item.faixa_etaria) {
+                        return { erro: 'Item ' + (i + 1) + ' sem faixa_etaria' };
+                    }
+                    if (!gppValorDoItem(item)) {
+                        return { erro: 'Item ' + (i + 1) + ' sem valor (use "valor", "coparticipacao_total" ou "coparticipacao_parcial")' };
+                    }
+                }
+                return { dados: dados };
+            }
+
+            // Atualiza status + pré-visualização de um textarea de JSON
+            function gppAtualizarEditor($campo) {
+                var id = $campo.attr('id');
+                var statusDiv = $('#' + id.replace('-json', '').replace(/^gpp-/, 'gpp-status-'));
+                var $preview = $campo.closest('.gpp-editor-json').find('.gpp-json-preview');
+                var r = gppValidarJson($campo.val());
+
+                if (r.vazio) {
                     statusDiv.html('');
+                    $preview.empty();
                     return;
                 }
-                
-                try {
-                    var dados = JSON.parse(valor);
-                    if (!Array.isArray(dados)) {
-                        statusDiv.html('<span class="gpp-status-error">✗ Erro: JSON deve ser um array</span>');
-                        return;
-                    }
-                    
-                    for (var i = 0; i < dados.length; i++) {
-                        var item = dados[i];
-                        
-                        // Verifica se tem faixa_etaria
-                        if (!item.faixa_etaria) {
-                            statusDiv.html('<span class="gpp-status-error">✗ Erro: Item ' + (i+1) + ' sem faixa_etaria</span>');
-                            return;
-                        }
-                        
-                        // Verifica se tem algum campo de valor (aceita múltiplos formatos)
-                        var temValor = item.valor || item.coparticipacao_total || item.coparticipacao_parcial;
-                        if (!temValor) {
-                            statusDiv.html('<span class="gpp-status-error">✗ Erro: Item ' + (i+1) + ' sem valor (use "valor", "coparticipacao_total" ou "coparticipacao_parcial")</span>');
-                            return;
-                        }
-                    }
-                    
-                    statusDiv.html('<span class="gpp-status-success">✓ JSON válido (' + dados.length + ' faixas)</span>');
-                } catch (e) {
-                    statusDiv.html('<span class="gpp-status-error">✗ Erro: ' + e.message + '</span>');
+                if (r.erro) {
+                    statusDiv.html('<span class="gpp-status-error">✗ Erro: ' + r.erro + '</span>');
+                    $preview.empty();
+                    return;
                 }
+
+                statusDiv.html('<span class="gpp-status-success">✓ JSON válido (' + r.dados.length + ' faixas)</span>');
+
+                var html = '<p class="gpp-preview-titulo">Pré-visualização — ' + r.dados.length + ' faixas</p>';
+                html += '<table><thead><tr><th>Faixa etária</th><th>Valor</th></tr></thead><tbody>';
+                r.dados.forEach(function (item) {
+                    var faixa = $('<span>').text(item.faixa_etaria).html();
+                    var valor = $('<span>').text(gppValorDoItem(item)).html();
+                    html += '<tr><td>' + faixa + '</td><td>' + valor + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                $preview.html(html);
+            }
+
+            function gppAtualizarTodosEditores() {
+                $('.gpp-json-field').each(function () { gppAtualizarEditor($(this)); });
+            }
+
+            $(document).on('input', '.gpp-json-field', function () {
+                gppAtualizarEditor($(this));
+            });
+
+            // Botão { } Formatar — reindenta o JSON colado
+            $(document).on('click', '.gpp-json-formatar', function () {
+                var $editor = $(this).closest('.gpp-editor-json');
+                var $campo = $editor.find('.gpp-json-field');
+                var r = gppValidarJson($campo.val());
+                if (r.dados) {
+                    $campo.val(JSON.stringify(r.dados, null, 2));
+                }
+                gppAtualizarEditor($campo);
+            });
+
+            // Botão Reajustar % — multiplica todos os valores do JSON
+            $(document).on('click', '.gpp-reajuste-aplicar', function () {
+                var $editor = $(this).closest('.gpp-editor-json');
+                var $campo = $editor.find('.gpp-json-field');
+                var id = $campo.attr('id');
+                var statusDiv = $('#' + id.replace('-json', '').replace(/^gpp-/, 'gpp-status-'));
+                var pct = gppParaNumero($editor.find('.gpp-reajuste-pct').val());
+
+                if (isNaN(pct) || pct === 0) {
+                    statusDiv.html('<span class="gpp-status-error">✗ Informe o percentual de reajuste (ex.: 7,5)</span>');
+                    return;
+                }
+                var r = gppValidarJson($campo.val());
+                if (r.vazio || r.erro) {
+                    statusDiv.html('<span class="gpp-status-error">✗ Cole um JSON válido antes de reajustar</span>');
+                    return;
+                }
+
+                // Guarda o estado anterior para o Desfazer
+                $campo.data('gpp-anterior', $campo.val());
+
+                r.dados.forEach(function (item) {
+                    ['valor', 'coparticipacao_total', 'coparticipacao_parcial'].forEach(function (chave) {
+                        if (item[chave]) {
+                            var n = gppParaNumero(item[chave]);
+                            if (!isNaN(n)) {
+                                item[chave] = gppParaMoeda(n * (1 + pct / 100));
+                            }
+                        }
+                    });
+                });
+
+                $campo.val(JSON.stringify(r.dados, null, 2));
+                gppAtualizarEditor($campo);
+                statusDiv.html('<span class="gpp-status-success">✓ Reajuste de ' + $editor.find('.gpp-reajuste-pct').val() + '% aplicado em ' + r.dados.length + ' faixas — confira e clique em Salvar</span>');
+                $editor.find('.gpp-reajuste-desfazer').show();
+            });
+
+            // Botão Desfazer — restaura o JSON de antes do reajuste
+            $(document).on('click', '.gpp-reajuste-desfazer', function () {
+                var $editor = $(this).closest('.gpp-editor-json');
+                var $campo = $editor.find('.gpp-json-field');
+                var anterior = $campo.data('gpp-anterior');
+                if (typeof anterior === 'string') {
+                    $campo.val(anterior);
+                    gppAtualizarEditor($campo);
+                }
+                $(this).hide();
             });
             
             // Controle desconto personalizado
@@ -915,6 +1060,9 @@ trait GPP_Admin {
                 $('.gpp-desconto-diferenciado').val('');
                 $('#gpp-tabela-simples-json').val('');
                 $('.gpp-status-json').empty();
+                $('.gpp-json-preview').empty();
+                $('.gpp-reajuste-desfazer').hide();
+                $('.gpp-reajuste-pct').val('');
                 gppAplicarModoModal(GPP_SIMPLES);
                 modal.show();
             });
@@ -981,7 +1129,8 @@ trait GPP_Admin {
                                 } else {
                                     $('#gpp-tabela-simples-json').val('');
                                 }
-                                $('.gpp-status-json').empty();
+                                $('.gpp-reajuste-desfazer').hide();
+                                gppAtualizarTodosEditores();
                                 modal.show();
                                 return;
                             }
@@ -1019,7 +1168,8 @@ trait GPP_Admin {
                                 }
                             });
                             
-                            $('.gpp-status-json').empty();
+                            $('.gpp-reajuste-desfazer').hide();
+                            gppAtualizarTodosEditores();
                             modal.show();
                         }
                     }
@@ -2351,6 +2501,82 @@ public function pagina_variaveis() {
                 overflow-y: auto;
             }
             .gpp-gaveta-corpo .gpp-bloco-sc { margin-bottom: 12px; }
+
+            /* ===== EDITOR JSON DINÂMICO (modal de cidade) ===== */
+            .gpp-editor-json { margin-bottom: 4px; }
+            .gpp-editor-toolbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                flex-wrap: wrap;
+                margin-bottom: 6px;
+            }
+            .gpp-editor-toolbar label { margin-bottom: 0 !important; }
+            .gpp-editor-ferramentas {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+                margin-left: auto;
+                font-size: 12px;
+                color: #64748b;
+            }
+            .gpp-reajuste { display: inline-flex; align-items: center; gap: 4px; }
+            .gpp-reajuste-pct {
+                width: 60px;
+                padding: 3px 8px;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                text-align: right;
+                font-size: 12px;
+            }
+            .gpp-json-preview { margin-top: 8px; }
+            .gpp-json-preview .gpp-preview-titulo {
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #64748b;
+                margin: 0 0 4px;
+            }
+            .gpp-json-preview table {
+                width: 100%;
+                border-collapse: collapse;
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .gpp-json-preview th {
+                text-align: left;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: #64748b;
+                background: #f8fafc;
+                padding: 6px 12px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .gpp-json-preview td {
+                padding: 5px 12px;
+                font-size: 12.5px;
+                color: #1e293b;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            .gpp-json-preview th:last-child,
+            .gpp-json-preview td:last-child {
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            .gpp-json-preview td:last-child {
+                font-family: Consolas, Monaco, 'Courier New', monospace;
+                font-weight: 600;
+                color: #0a4b78;
+            }
+            .gpp-json-preview tbody tr:nth-child(even) td { background: #f8fafc; }
+            .gpp-json-preview tbody tr:last-child td { border-bottom: none; }
         </style>
         <?php
     }
