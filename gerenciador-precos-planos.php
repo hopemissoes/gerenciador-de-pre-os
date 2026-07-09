@@ -2,7 +2,7 @@
 /*
 Plugin Name: Gerenciador de Preços de Planos de Saúde
 Description: Plugin para gerenciar tabelas de preços de planos de saúde por cidade e por operadora (Hapvida completa; Amil, Unimed e SulAmérica em modo tabela única) com shortcodes individuais, comparação entre operadoras e sistema de descontos
-Version: 7.0
+Version: 8.0
 Author: Seu Nome
 */
 
@@ -100,6 +100,64 @@ class Gerenciador_Precos_Planos {
     public function obter_config_operadora($operadora) {
         $operadora = $this->sanitizar_operadora($operadora);
         return $this->operadoras[$operadora];
+    }
+
+    /**
+     * ===== HELPERS DE COR (usados no CSS gerado por operadora) =====
+     */
+    private function hex_para_rgb($hex) {
+        $hex = ltrim(trim((string) $hex), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+        if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
+            return array(0, 84, 184); // fallback: azul Hapvida
+        }
+        return array(hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2)));
+    }
+
+    private function cor_alpha($hex, $alpha) {
+        list($r, $g, $b) = $this->hex_para_rgb($hex);
+        return 'rgba(' . $r . ', ' . $g . ', ' . $b . ', ' . $alpha . ')';
+    }
+
+    private function escurecer_cor($hex, $fator = 0.2) {
+        list($r, $g, $b) = $this->hex_para_rgb($hex);
+        $r = max(0, (int) round($r * (1 - $fator)));
+        $g = max(0, (int) round($g * (1 - $fator)));
+        $b = max(0, (int) round($b * (1 - $fator)));
+        return sprintf('#%02x%02x%02x', $r, $g, $b);
+    }
+
+    /**
+     * Converte um valor monetário em texto para número.
+     * Aceita "R$ 1.234,56", "1234,56", "199,90" e também o formato com ponto
+     * decimal ("199.90"), que antes era interpretado errado (virava 19990).
+     */
+    public static function converter_valor_para_numero($valor) {
+        $limpo = preg_replace('/[^0-9.,]/', '', (string) $valor);
+        if ($limpo === '' || $limpo === null) {
+            return 0.0;
+        }
+
+        $tem_virgula = strpos($limpo, ',') !== false;
+        $tem_ponto   = strpos($limpo, '.') !== false;
+
+        if ($tem_virgula) {
+            // Padrão brasileiro: ponto é milhar, vírgula é decimal
+            $limpo = str_replace('.', '', $limpo);
+            $limpo = str_replace(',', '.', $limpo);
+        } elseif ($tem_ponto) {
+            $pos_ultimo     = strrpos($limpo, '.');
+            $digitos_depois = strlen($limpo) - $pos_ultimo - 1;
+            // Um único ponto com 1-2 dígitos depois => decimal ("199.9" / "199.90").
+            // Caso contrário ("1.234", "1.234.567") => separador de milhar.
+            if (substr_count($limpo, '.') !== 1 || $digitos_depois === 3 || $digitos_depois === 0) {
+                $limpo = str_replace('.', '', $limpo);
+            }
+        }
+
+        return floatval($limpo);
     }
 
     public function __construct() {
@@ -267,7 +325,7 @@ class Gerenciador_Precos_Planos {
         if (defined('WP_DEBUG') && WP_DEBUG) {
             $cidades = $this->obter_todas_cidades_global();
             error_log('GPP: Shortcodes registrados para ' . count($cidades) . ' cidades (todas as operadoras)');
-            error_log('GPP: Variáveis limitadas a faixas 0, 1 e 9 (primeira, segunda e última)');
+            error_log('GPP: Variáveis limitadas à primeira, segunda e última faixa de cada tabela');
             error_log('GPP: Shortcodes regionais: 12 (2 regiões × 6 campos)');
             error_log('GPP: Memória usada: ' . size_format(memory_get_usage(true)));
         }
@@ -611,11 +669,9 @@ class Gerenciador_Precos_Planos {
                         // Verifica a primeira faixa (geralmente a mais barata)
                         if (isset($cidade[$campo][0]['valor'])) {
                             $valor_string = $cidade[$campo][0]['valor'];
-                            
+
                             // Converte para número para comparação
-                            $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor_string);
-                            $preco_limpo = str_replace(',', '.', $preco_limpo);
-                            $preco_numerico = floatval($preco_limpo);
+                            $preco_numerico = self::converter_valor_para_numero($valor_string);
                             
                             // Aplica desconto se houver
                             $desconto = $this->obter_desconto_tipo($cidade, $tipo_key);
@@ -689,9 +745,7 @@ class Gerenciador_Precos_Planos {
                         if (isset($ultima_faixa['valor'])) {
                             $valor_string = $ultima_faixa['valor'];
 
-                            $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor_string);
-                            $preco_limpo = str_replace(',', '.', $preco_limpo);
-                            $preco_numerico = floatval($preco_limpo);
+                            $preco_numerico = self::converter_valor_para_numero($valor_string);
 
                             $desconto = $this->obter_desconto_tipo($cidade, $tipo_key);
                             if ($desconto > 0) {
@@ -791,8 +845,9 @@ public function pagina_variaveis() {
             }
         }
     }
+    $this->imprimir_estilos_admin();
     ?>
-    <div class="wrap gpp-variaveis-page">
+    <div class="wrap gpp-admin gpp-variaveis-page">
         <h1>📋 Variáveis Dinâmicas Disponíveis</h1>
 
         <h2 class="nav-tab-wrapper" style="margin-bottom: 20px;">
@@ -806,14 +861,14 @@ public function pagina_variaveis() {
             <?php endforeach; ?>
         </h2>
 
-        <div style="padding: 10px 15px; margin-bottom: 15px; background: <?php echo esc_attr($operadora_cfg['cor']); ?>; color: #fff; border-radius: 5px; font-size: 16px;">
+        <div class="gpp-banner-op" style="background: linear-gradient(135deg, <?php echo esc_attr($operadora_cfg['cor']); ?>, <?php echo esc_attr($this->escurecer_cor($operadora_cfg['cor'], 0.25)); ?>);">
             Operadora: <strong><?php echo esc_html($operadora_cfg['nome']); ?></strong>
             <?php if ($operadora_cfg['prefixo'] !== ''): ?>
-                &nbsp;—&nbsp; todos os shortcodes abaixo já incluem o prefixo <code style="background: rgba(255,255,255,0.25); color: #fff; padding: 2px 6px; border-radius: 3px;"><?php echo esc_html($operadora_cfg['prefixo']); ?></code>
+                &nbsp;—&nbsp; todos os shortcodes abaixo já incluem o prefixo <code><?php echo esc_html($operadora_cfg['prefixo']); ?></code>
             <?php endif; ?>
         </div>
 
-        <div style="background: #fff; padding: 20px; margin: 20px 0; border-left: 4px solid #0054b8;">
+        <div class="gpp-card" style="border-left: 4px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">
             <h2>Como usar as variáveis</h2>
             <p>✅ As variáveis abaixo podem ser usadas em <strong>qualquer lugar do WordPress</strong>: títulos de páginas, textos, meta descriptions, schemas, widgets, etc.</p>
         </div>
@@ -1093,14 +1148,19 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_total] as $idx => $plano): 
+                                                <?php $idx_reg_total = array_flip($this->indices_faixas_registrar(count($cidade[$campo_total]))); ?>
+                                                <?php foreach ($cidade[$campo_total] as $idx => $plano):
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'total_' . $idx;
                                                 ?>
                                                     <tr>
                                                         <td><strong><?php echo esc_html($plano['faixa_etaria']); ?></strong></td>
                                                         <td>
-                                                            <code>[<?php echo esc_html($shortcode_var); ?>]</code>
-                                                            <button class="button button-small gpp-copiar-var" data-var="[<?php echo esc_attr($shortcode_var); ?>]">📋 Copiar</button>
+                                                            <?php if (isset($idx_reg_total[$idx])): ?>
+                                                                <code>[<?php echo esc_html($shortcode_var); ?>]</code>
+                                                                <button class="button button-small gpp-copiar-var" data-var="[<?php echo esc_attr($shortcode_var); ?>]">📋 Copiar</button>
+                                                            <?php else: ?>
+                                                                <span style="color:#999;">— sem shortcode individual (por desempenho, só 1ª, 2ª e última faixa)</span>
+                                                            <?php endif; ?>
                                                         </td>
                                                         <td><strong><?php echo $this->obter_valor_formatado_simples($cidade, $plano['valor'], $tipo_key); ?></strong></td>
                                                     </tr>
@@ -1124,14 +1184,19 @@ public function pagina_variaveis() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <?php foreach ($cidade[$campo_parcial] as $idx => $plano): 
+                                                <?php $idx_reg_parcial = array_flip($this->indices_faixas_registrar(count($cidade[$campo_parcial]))); ?>
+                                                <?php foreach ($cidade[$campo_parcial] as $idx => $plano):
                                                     $shortcode_var = $cidade['shortcode'] . '_' . $tipo_info['sigla'] . '_' . $acom_key . 'parcial_' . $idx;
                                                 ?>
                                                     <tr>
                                                         <td><strong><?php echo esc_html($plano['faixa_etaria']); ?></strong></td>
                                                         <td>
-                                                            <code>[<?php echo esc_html($shortcode_var); ?>]</code>
-                                                            <button class="button button-small gpp-copiar-var" data-var="[<?php echo esc_attr($shortcode_var); ?>]">📋 Copiar</button>
+                                                            <?php if (isset($idx_reg_parcial[$idx])): ?>
+                                                                <code>[<?php echo esc_html($shortcode_var); ?>]</code>
+                                                                <button class="button button-small gpp-copiar-var" data-var="[<?php echo esc_attr($shortcode_var); ?>]">📋 Copiar</button>
+                                                            <?php else: ?>
+                                                                <span style="color:#999;">— sem shortcode individual (por desempenho, só 1ª, 2ª e última faixa)</span>
+                                                            <?php endif; ?>
                                                         </td>
                                                         <td><strong><?php echo $this->obter_valor_formatado_simples($cidade, $plano['valor'], $tipo_key); ?></strong></td>
                                                     </tr>
@@ -1298,11 +1363,12 @@ public function pagina_variaveis() {
                 'emoji' => '🌆'
             )
         );
+        $this->imprimir_estilos_admin();
         ?>
-        <div class="wrap">
-            <h1>Valores Regionais - Procedimentos Médicos</h1>
+        <div class="wrap gpp-admin">
+            <h1>🏥 Valores Regionais - Procedimentos Médicos</h1>
 
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border-left: 4px solid #0054b8;">
+            <div class="gpp-card" style="border-left: 4px solid #0054b8;">
                 <h2 style="margin-top: 0;">Como usar</h2>
                 <p>Configure os valores de procedimentos médicos para cada região. Os shortcodes serão gerados automaticamente.</p>
 
@@ -1332,9 +1398,9 @@ public function pagina_variaveis() {
 
             <form id="gpp-form-regionais">
                 <?php foreach ($regioes as $regiao_key => $regiao_info): ?>
-                    <div style="background: #fff; padding: 20px; margin: 20px 0; border: 2px solid <?php echo $regiao_info['cor']; ?>; border-radius: 5px;">
-                        <h2 style="margin-top: 0; color: <?php echo $regiao_info['cor']; ?>;">
-                            <?php echo $regiao_info['emoji']; ?> <?php echo $regiao_info['nome']; ?>
+                    <div class="gpp-card" style="border-left: 4px solid <?php echo esc_attr($regiao_info['cor']); ?>;">
+                        <h2 style="margin-top: 0; color: <?php echo esc_attr($regiao_info['cor']); ?>;">
+                            <?php echo $regiao_info['emoji']; ?> <?php echo esc_html($regiao_info['nome']); ?>
                         </h2>
 
                         <table class="form-table">
@@ -1369,7 +1435,7 @@ public function pagina_variaveis() {
             </form>
 
             <!-- Tabela de referência dos shortcodes -->
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border: 1px solid #ddd;">
+            <div class="gpp-card">
                 <h2 style="margin-top: 0;">📋 Referência Rápida de Shortcodes</h2>
 
                 <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
@@ -1453,18 +1519,29 @@ public function pagina_variaveis() {
 
         <script>
         jQuery(document).ready(function($) {
-            // Copiar shortcode
+            // Copiar shortcode (com fallback para ambientes sem clipboard API)
             $('.gpp-copiar-shortcode').on('click', function() {
                 var shortcode = $(this).data('shortcode');
                 var $btn = $(this);
                 var textoOriginal = $btn.html();
 
-                navigator.clipboard.writeText(shortcode).then(function() {
+                var confirmar = function() {
                     $btn.html('✅');
                     setTimeout(function() {
                         $btn.html(textoOriginal);
                     }, 2000);
-                });
+                };
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(shortcode).then(confirmar);
+                } else {
+                    var $temp = $('<input>');
+                    $('body').append($temp);
+                    $temp.val(shortcode).select();
+                    document.execCommand('copy');
+                    $temp.remove();
+                    confirmar();
+                }
             });
 
             // Salvar valores via AJAX
@@ -1540,23 +1617,26 @@ public function pagina_variaveis() {
             return null;
         }
         
-        // Normaliza cada item para usar "valor"
+        // Normaliza cada item para usar "valor" (sanitizando os textos)
         $dados_normalizados = array();
         foreach ($dados as $item) {
-            $item_normalizado = array();
-            
-            // Mantém faixa_etaria
-            if (isset($item['faixa_etaria'])) {
-                $item_normalizado['faixa_etaria'] = $item['faixa_etaria'];
+            if (!is_array($item)) {
+                continue;
             }
-            
+            $item_normalizado = array();
+
+            // Mantém faixa_etaria
+            if (isset($item['faixa_etaria']) && is_scalar($item['faixa_etaria'])) {
+                $item_normalizado['faixa_etaria'] = sanitize_text_field((string) $item['faixa_etaria']);
+            }
+
             // Normaliza o campo de valor
-            if (isset($item['valor'])) {
-                $item_normalizado['valor'] = $item['valor'];
-            } elseif (isset($item['coparticipacao_total'])) {
-                $item_normalizado['valor'] = $item['coparticipacao_total'];
-            } elseif (isset($item['coparticipacao_parcial'])) {
-                $item_normalizado['valor'] = $item['coparticipacao_parcial'];
+            if (isset($item['valor']) && is_scalar($item['valor'])) {
+                $item_normalizado['valor'] = sanitize_text_field((string) $item['valor']);
+            } elseif (isset($item['coparticipacao_total']) && is_scalar($item['coparticipacao_total'])) {
+                $item_normalizado['valor'] = sanitize_text_field((string) $item['coparticipacao_total']);
+            } elseif (isset($item['coparticipacao_parcial']) && is_scalar($item['coparticipacao_parcial'])) {
+                $item_normalizado['valor'] = sanitize_text_field((string) $item['coparticipacao_parcial']);
             }
             
             // Só adiciona se tiver os campos necessários
@@ -1619,11 +1699,12 @@ public function pagina_variaveis() {
                         // Total
                         $campo_total = $tipo_key_local . '_' . $acom_local . '_total';
                         if (!empty($cidade_local[$campo_total])) {
-                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
+                            // OTIMIZAÇÃO: registra apenas a 1ª, a 2ª e a ÚLTIMA faixa
+                            // (independente de quantas faixas a tabela tiver).
                             // Evita sobrecarga com 10 faixas × múltiplas cidades
+                            $faixas_permitidas_total = array_flip($this->indices_faixas_registrar(count($cidade_local[$campo_total])));
                             foreach ($cidade_local[$campo_total] as $index => $plano) {
-                                // Registra apenas índices 0, 1 e 9
-                                if ($index !== 0 && $index !== 1 && $index !== 9) {
+                                if (!isset($faixas_permitidas_total[$index])) {
                                     continue;
                                 }
 
@@ -1652,11 +1733,12 @@ public function pagina_variaveis() {
                         // Parcial
                         $campo_parcial = $tipo_key_local . '_' . $acom_local . '_parcial';
                         if (!empty($cidade_local[$campo_parcial])) {
-                            // OTIMIZAÇÃO: Registra apenas faixas 0, 1 e 9 (primeira, segunda e última)
+                            // OTIMIZAÇÃO: registra apenas a 1ª, a 2ª e a ÚLTIMA faixa
+                            // (independente de quantas faixas a tabela tiver).
                             // Evita sobrecarga com 10 faixas × múltiplas cidades
+                            $faixas_permitidas_parcial = array_flip($this->indices_faixas_registrar(count($cidade_local[$campo_parcial])));
                             foreach ($cidade_local[$campo_parcial] as $index => $plano) {
-                                // Registra apenas índices 0, 1 e 9
-                                if ($index !== 0 && $index !== 1 && $index !== 9) {
+                                if (!isset($faixas_permitidas_parcial[$index])) {
                                     continue;
                                 }
 
@@ -1761,8 +1843,9 @@ public function pagina_variaveis() {
      */
     public function registrar_shortcodes_data() {
         // Shortcode [ano_atual] - retorna o ano atual (ex: 2026)
+        // wp_date respeita o fuso horário configurado no WordPress
         add_shortcode('ano_atual', function() {
-            return date('Y');
+            return wp_date('Y');
         });
 
         // Shortcode [mes_atual] - retorna o mês atual em português (ex: Abril)
@@ -1781,7 +1864,7 @@ public function pagina_variaveis() {
                 11 => 'Novembro',
                 12 => 'Dezembro'
             );
-            return $meses[(int) date('n')];
+            return $meses[(int) wp_date('n')];
         });
     }
 
@@ -1860,12 +1943,12 @@ public function pagina_variaveis() {
             'ano_atual',
             array(
                 'name'        => 'Ano Atual',
-                'description' => 'Retorna o ano atual (ex: ' . date('Y') . ')',
+                'description' => 'Retorna o ano atual (ex: ' . wp_date('Y') . ')',
                 'variable'    => 'ano_atual',
-                'example'     => date('Y'),
+                'example'     => wp_date('Y'),
             ),
             function() {
-                return date('Y');
+                return wp_date('Y');
             }
         );
 
@@ -1888,12 +1971,12 @@ public function pagina_variaveis() {
             'mes_atual',
             array(
                 'name'        => 'Mês Atual',
-                'description' => 'Retorna o mês atual em português (ex: ' . $meses_pt[(int) date('n')] . ')',
+                'description' => 'Retorna o mês atual em português (ex: ' . $meses_pt[(int) wp_date('n')] . ')',
                 'variable'    => 'mes_atual',
-                'example'     => $meses_pt[(int) date('n')],
+                'example'     => $meses_pt[(int) wp_date('n')],
             ),
             function() use ($meses_pt) {
-                return $meses_pt[(int) date('n')];
+                return $meses_pt[(int) wp_date('n')];
             }
         );
 
@@ -2012,12 +2095,10 @@ public function pagina_variaveis() {
         
         // Aplica desconto se houver
         $desconto = $this->obter_desconto_tipo($cidade_encontrada, $tipo);
-        
+
         // Remove formatação e converte para número
-        $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor);
-        $preco_limpo = str_replace(',', '.', $preco_limpo);
-        $preco_numerico = floatval($preco_limpo);
-        
+        $preco_numerico = self::converter_valor_para_numero($valor);
+
         // Aplica desconto se houver
         if ($desconto > 0) {
             $multiplicador = 1 - ($desconto / 100);
@@ -2148,6 +2229,14 @@ public function pagina_variaveis() {
 
         // Verifica permissões
         if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        // SEGURANÇA: o schema é impresso no frontend sem sanitização (para
+        // preservar <script type="application/ld+json">). Por isso, só quem
+        // pode publicar HTML irrestrito (admins/editores) pode salvá-lo —
+        // evita XSS armazenado por usuários de papel inferior.
+        if (!current_user_can('unfiltered_html')) {
             return;
         }
 
@@ -2552,9 +2641,7 @@ public function registrar_shortcodes() {
             if (!isset($linha['valor'])) {
                 continue;
             }
-            $limpo = str_replace(array('R$', ' ', '.'), '', $linha['valor']);
-            $limpo = str_replace(',', '.', $limpo);
-            $num = floatval($limpo);
+            $num = self::converter_valor_para_numero($linha['valor']);
             if ($desconto > 0) {
                 $num = $num * (1 - ($desconto / 100));
             }
@@ -2766,9 +2853,7 @@ public function registrar_shortcodes() {
      * Converte "R$ 1.234,56" para número (float) aplicando desconto.
      */
     private function valor_para_numero_com_desconto($valor_str, $desconto) {
-        $limpo = str_replace(array('R$', ' ', '.'), '', (string) $valor_str);
-        $limpo = str_replace(',', '.', $limpo);
-        $num = floatval($limpo);
+        $num = self::converter_valor_para_numero($valor_str);
         if ($desconto > 0) {
             $num = $num * (1 - ($desconto / 100));
         }
@@ -2931,67 +3016,48 @@ public function registrar_shortcodes() {
 
         ob_start();
         ?>
-        <div style="overflow-x: auto; margin-bottom: 8px; border-radius: 12px; border: 1px solid #e2e8f0;">
-        <table style="width: 100%; border-collapse: collapse; min-width: 500px;">
+        <div class="gpp-comparativa-wrap gpp-op-hapvida">
+        <table class="gpp-comparativa">
         <thead>
-        <tr style="background: linear-gradient(135deg,#1a1a2e,#16213e);">
-        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Operadora</th>
-        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Mensal (<?php echo (int) $qtd_pessoas; ?> pessoas)</th>
-        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;">Anual</th>
-        <th style="padding: 14px 12px; color: #fff; font-weight: bold; font-size: 14px; text-align: left; border-bottom: 2px solid #ff6b00;"><?php echo esc_html($atts['titulo_economia']); ?></th>
+        <tr>
+        <th>Operadora</th>
+        <th>Mensal (<?php echo (int) $qtd_pessoas; ?> pessoas)</th>
+        <th>Anual</th>
+        <th><?php echo esc_html($atts['titulo_economia']); ?></th>
         </tr>
         </thead>
         <tbody>
         <?php
-        $i = 0;
-        $total_linhas = count($ordem);
         foreach ($ordem as $op_key => $dados):
-            $ultima = ($i === $total_linhas - 1);
-            $borda = $ultima ? '' : 'border-bottom: 1px solid #f1f5f9;';
             $is_hapvida = ($op_key === 'hapvida');
-
-            // Cor de fundo da linha
-            if ($is_hapvida) {
-                $bg = '#fff8f3';
-            } else {
-                $bg = ($i % 2 === 0) ? '#fff' : '#f8f9fa';
-            }
 
             // Coluna economia
             if ($is_hapvida || $hapvida_anual === null) {
-                $economia_html = '<span style="font-weight: bold; color: #1a202c;">—</span>';
+                $economia_html = '<span class="gpp-op-nome">&mdash;</span>';
             } else {
                 $diff = $dados['anual'] - $hapvida_anual; // > 0 => operadora mais cara que Hapvida
                 if ($diff > 0) {
                     $pct = ($dados['anual'] > 0) ? round(($diff / $dados['anual']) * 100) : 0;
-                    $economia_html = '<span style="color: #c53030; font-weight: 600;">-' . $this->formatar_moeda($diff) . ' (' . $pct . '%)</span>';
+                    $economia_html = '<span class="gpp-eco-mais-caro">-' . $this->formatar_moeda($diff) . ' (' . $pct . '%)</span>';
                 } elseif ($diff < 0) {
                     $pct = ($hapvida_anual > 0) ? round((abs($diff) / $hapvida_anual) * 100) : 0;
-                    $economia_html = '<span style="color: #2f855a; font-weight: 600;">+' . $this->formatar_moeda(abs($diff)) . ' (' . $pct . '%)</span>';
+                    $economia_html = '<span class="gpp-eco-mais-barato">+' . $this->formatar_moeda(abs($diff)) . ' (' . $pct . '%)</span>';
                 } else {
-                    $economia_html = '<span style="color: #1a202c; font-weight: 600;">R$ 0,00</span>';
+                    $economia_html = '<span class="gpp-op-nome">R$ 0,00</span>';
                 }
             }
-
-            $cor_nome  = $is_hapvida ? '#ff6b00' : '#1a202c';
-            $peso_nome = $is_hapvida ? '800' : '600';
-            $cor_valor = $is_hapvida ? '#ff6b00' : '#4a5568';
-            $peso_valor = $is_hapvida ? 'bold' : 'normal';
         ?>
-        <tr style="background: <?php echo $bg; ?>;">
-        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_nome; ?>; color: <?php echo $cor_nome; ?>;"><?php echo esc_html(strtoupper($dados['nome'])); ?></td>
-        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_valor; ?>; color: <?php echo $cor_valor; ?>;"><?php echo esc_html($this->formatar_moeda($dados['mensal'])); ?></td>
-        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px; font-weight: <?php echo $peso_valor; ?>; color: <?php echo $cor_valor; ?>;"><?php echo esc_html($this->formatar_moeda($dados['anual'])); ?></td>
-        <td style="padding: 10px 12px; <?php echo $borda; ?> font-size: 14px;"><?php echo $economia_html; ?></td>
+        <tr<?php echo $is_hapvida ? ' class="gpp-linha-referencia"' : ''; ?>>
+        <td><span class="gpp-op-nome"><?php echo esc_html(strtoupper($dados['nome'])); ?></span><?php if ($is_hapvida): ?><span class="gpp-badge-referencia">Referência</span><?php endif; ?></td>
+        <td<?php echo $is_hapvida ? ' class="gpp-valor-ref"' : ''; ?>><?php echo esc_html($this->formatar_moeda($dados['mensal'])); ?></td>
+        <td<?php echo $is_hapvida ? ' class="gpp-valor-ref"' : ''; ?>><?php echo esc_html($this->formatar_moeda($dados['anual'])); ?></td>
+        <td><?php echo $economia_html; ?></td>
         </tr>
-        <?php
-            $i++;
-        endforeach;
-        ?>
+        <?php endforeach; ?>
         </tbody>
         </table>
         </div>
-        <p style="font-size: 12px; color: #718096; margin: 0 0 20px 0;"><?php echo esc_html($desc_familia); ?> Valores sujeitos a alteração; consulte condições.</p>
+        <p class="gpp-comparativa-nota"><?php echo esc_html($desc_familia); ?> Valores sujeitos a alteração; consulte condições.</p>
         <?php
         return ob_get_clean();
     }
@@ -3163,10 +3229,8 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
 }
 
     private function formatar_preco_com_desconto($preco, $desconto_percentual) {
-        $preco_limpo = str_replace(array('R$', ' ', '.'), '', $preco);
-        $preco_limpo = str_replace(',', '.', $preco_limpo);
-        $preco_numerico = floatval($preco_limpo);
-        
+        $preco_numerico = self::converter_valor_para_numero($preco);
+
         if ($desconto_percentual > 0) {
             $multiplicador = 1 - ($desconto_percentual / 100);
             $preco_com_desconto = $preco_numerico * $multiplicador;
@@ -3388,185 +3452,197 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     public function adicionar_estilos_inline() {
         ?>
         <style type="text/css">
-        p {
-            font-weight: normal !important;
+        /* =====================================================================
+           GPP — DESIGN SYSTEM DO FRONT-END (v8)
+           Todas as regras são ESCOPADAS às classes do plugin (nada vaza para o
+           resto do site). As cores vêm de variáveis CSS definidas por operadora.
+           ===================================================================== */
+
+        .gpp-container-cidade,
+        .gpp-card-operadora,
+        .gpp-comparativa-wrap {
+            /* Padrão (Hapvida) — sobrescrito pelas classes .gpp-op-* abaixo */
+            --gpp-cor: #0054B8;
+            --gpp-cor-escura: #003d87;
+            --gpp-cor-bg: rgba(0, 84, 184, 0.06);
+            --gpp-destaque: #F05A22;
+            --gpp-destaque-escuro: #c94515;
+            --gpp-destaque-bg: rgba(240, 90, 34, 0.10);
+            --gpp-destaque-sombra: rgba(240, 90, 34, 0.40);
         }
-        
+
+        <?php foreach ($this->operadoras as $op_key => $op_info):
+            $cor = $op_info['cor'];
+            $destaque = $op_info['cor_destaque'];
+        ?>
+        .gpp-op-<?php echo esc_attr($op_key); ?> {
+            --gpp-cor: <?php echo esc_attr($cor); ?>;
+            --gpp-cor-escura: <?php echo esc_attr($this->escurecer_cor($cor, 0.25)); ?>;
+            --gpp-cor-bg: <?php echo esc_attr($this->cor_alpha($cor, 0.06)); ?>;
+            --gpp-destaque: <?php echo esc_attr($destaque); ?>;
+            --gpp-destaque-escuro: <?php echo esc_attr($this->escurecer_cor($destaque, 0.18)); ?>;
+            --gpp-destaque-bg: <?php echo esc_attr($this->cor_alpha($destaque, 0.10)); ?>;
+            --gpp-destaque-sombra: <?php echo esc_attr($this->cor_alpha($destaque, 0.40)); ?>;
+        }
+        <?php endforeach; ?>
+
+        .gpp-container-cidade {
+            margin: 24px 0;
+        }
+
+        .gpp-container-cidade p {
+            font-weight: normal;
+        }
+
+        /* ===== TABELA DE PREÇOS ===== */
         .tabela-precos-hapvida {
             width: 100%;
-            border-collapse: collapse;
             margin: 20px 0;
             overflow: hidden;
-            display: block;
-            border-radius: 20px !important;
+            background: #FFFFFF !important;
+            border: 1px solid #e5eaf1 !important;
+            border-radius: 16px !important;
+            box-shadow: 0 10px 28px -16px rgba(15, 23, 42, 0.28) !important;
         }
 
         .tabela-precos-hapvida table {
-            width: 100%;
-            border-collapse: collapse;
-            border-radius: 20px !important;
-            overflow: hidden;
+            width: 100% !important;
+            margin: 0 !important;
+            border: none !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
         }
 
         .tabela-precos-hapvida table th {
-            background-color: #0054B8 !important;
+            background: linear-gradient(135deg, var(--gpp-cor) 0%, var(--gpp-cor-escura) 100%) !important;
             color: #FFFFFF !important;
-            padding: 15px !important;
+            padding: 14px 20px !important;
             text-align: left !important;
-            font-weight: bold !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
+            letter-spacing: 0.6px !important;
+            text-transform: uppercase !important;
             border: none !important;
         }
 
-        .tabela-precos-hapvida table thead tr th:first-child {
-            border-top-left-radius: 20px !important;
+        .tabela-precos-hapvida table th:last-child {
+            text-align: right !important;
         }
 
-        .tabela-precos-hapvida table thead tr th:last-child {
-            border-top-right-radius: 20px !important;
-        }
-
-        .tabela-precos-hapvida table tbody tr:last-child td:first-child {
-            border-bottom-left-radius: 20px !important;
-        }
-
-        .tabela-precos-hapvida table tbody tr:last-child td:last-child {
-            border-bottom-right-radius: 20px !important;
-        }
-        
         .tabela-precos-hapvida table tbody tr td {
-            padding: 12px 15px !important;
-            border-bottom: 1px solid #ddd !important;
+            padding: 13px 20px !important;
+            border: none !important;
+            border-bottom: 1px solid #eef2f7 !important;
             font-weight: normal !important;
+            font-size: 15px !important;
             background-color: #FFFFFF !important;
-            color: #000000 !important;
+            color: #1e293b !important;
         }
-        
+
+        .tabela-precos-hapvida table tbody tr:nth-child(even) td {
+            background-color: #f8fafc !important;
+        }
+
+        .tabela-precos-hapvida table tbody tr:last-child td {
+            border-bottom: none !important;
+        }
+
+        .tabela-precos-hapvida table tbody tr td:last-child {
+            text-align: right !important;
+        }
+
         .tabela-precos-hapvida table tbody tr:hover td {
-            background-color: #f5f5f5 !important;
+            background-color: var(--gpp-cor-bg) !important;
         }
-        
+
         .tabela-precos-hapvida .valor-destaque {
-            color: #F05A22 !important;
-            font-weight: bold !important;
+            display: inline-block !important;
+            background: var(--gpp-destaque-bg) !important;
+            color: var(--gpp-destaque) !important;
+            font-weight: 700 !important;
+            font-size: 0.95em !important;
+            padding: 4px 14px !important;
+            border-radius: 999px !important;
+            white-space: nowrap !important;
+            font-variant-numeric: tabular-nums;
         }
-        
+
+        /* ===== AVISOS DE DESCONTO ===== */
         .gpp-desconto-info {
             text-align: center !important;
-            font-weight: bold !important;
+            font-weight: 700 !important;
             font-size: 14px !important;
-            margin: 10px 0 !important;
+            margin: 12px 0 !important;
             padding: 0 !important;
-            color: #d32f2f !important;
+            color: var(--gpp-destaque, #d32f2f) !important;
             background-color: transparent !important;
             border: none !important;
         }
-        
+
         .gpp-desconto-pequeno {
             text-align: center !important;
             font-weight: 600 !important;
-            font-size: 16px !important;
-            margin: -30px 0 5px 0 !important;
-            padding: 8px !important;
-            color: #F05A22 !important;
-            background-color: transparent !important;
+            font-size: 13px !important;
             font-style: italic !important;
-        }
-        
-        .gpp-observacoes-info {
-            text-align: left !important;
-            font-weight: 600 !important;
-            font-size: 16px !important;
-            line-height: 1.6 !important;
-            margin: 15px 0 20px 0 !important;
-            padding: 20px !important;
-            color: #333333 !important;
-            background-color: #fff3e0 !important;
-            border-left: 5px solid #F05A22 !important;
-            border-radius: 20px !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        }
-        
-        .gpp-botao-consulta {
-            display: inline-block !important;
-            background-color: #F05A22 !important;
-            color: #FFFFFF !important;
-            font-size: 18px !important;
-            font-weight: bold !important;
-            text-decoration: none !important;
-            padding: 15px 40px !important;
-            border-radius: 20px !important;
-            margin: 10px 0 20px 0 !important;
-            text-align: center !important;
-            transition: all 0.3s ease !important;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
-            border: none !important;
-        }
-        
-        .gpp-botao-consulta:hover {
-            background-color: #d64a1a !important;
-            color: #FFFFFF !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 5px 10px rgba(0,0,0,0.2) !important;
-            text-decoration: none !important;
-        }
-        
-        .gpp-botao-container {
-            text-align: center !important;
-            margin: 15px 0 !important;
-        }
-        
-        @media screen and (max-width: 768px) {
-            .tabela-precos-hapvida {
-                font-size: 14px;
-            }
-            .tabela-precos-hapvida table th {
-                font-size: 19px !important;
-            }
-            .tabela-precos-hapvida table tbody tr td {
-                font-size: 17px !important;
-            }
-            .tabela-precos-hapvida th,
-            .tabela-precos-hapvida td {
-                padding: 10px 8px !important;
-            }
-            .gpp-desconto-info {
-                font-size: 13px !important;
-            }
-            .gpp-desconto-pequeno {
-                font-size: 14px !important;
-            }
-            .gpp-observacoes-info {
-                font-size: 14px !important;
-                padding: 15px !important;
-            }
-            .gpp-botao-consulta {
-                font-size: 16px !important;
-                padding: 12px 30px !important;
-                width: 90% !important;
-                display: block !important;
-                margin: 10px auto !important;
-            }
+            margin: -8px 0 12px 0 !important;
+            padding: 0 !important;
+            color: var(--gpp-destaque, #F05A22) !important;
+            background-color: transparent !important;
         }
 
-        /* ===== CORES POR OPERADORA ===== */
-        <?php foreach ($this->operadoras as $op_key => $op_info): ?>
-        .gpp-op-<?php echo esc_attr($op_key); ?> .tabela-precos-hapvida table th {
-            background-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+        /* ===== CAIXA DE OBSERVAÇÕES ===== */
+        .gpp-observacoes-info {
+            text-align: left !important;
+            font-weight: normal !important;
+            font-size: 14px !important;
+            line-height: 1.7 !important;
+            margin: 18px 0 20px 0 !important;
+            padding: 18px 22px !important;
+            color: #475569 !important;
+            background-color: #f8fafc !important;
+            border: 1px solid #e2e8f0 !important;
+            border-left: 4px solid var(--gpp-cor, #0054B8) !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
         }
-        .gpp-op-<?php echo esc_attr($op_key); ?> .tabela-precos-hapvida .valor-destaque {
-            color: <?php echo esc_attr($op_info['cor_destaque']); ?> !important;
+
+        .gpp-observacoes-info > strong:first-child {
+            color: var(--gpp-cor, #0054B8) !important;
+            font-size: 14px !important;
+            display: inline-block;
+            margin-bottom: 4px;
         }
-        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-observacoes-info {
-            border-left-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+
+        /* ===== BOTÃO DE COTAÇÃO (CTA) ===== */
+        .gpp-botao-container {
+            text-align: center !important;
+            margin: 18px 0 !important;
         }
-        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-botao-consulta {
-            background-color: <?php echo esc_attr($op_info['cor']); ?> !important;
+
+        .gpp-botao-consulta {
+            display: inline-block !important;
+            background: linear-gradient(135deg, var(--gpp-destaque, #F05A22) 0%, var(--gpp-destaque-escuro, #d64a1a) 100%) !important;
+            color: #FFFFFF !important;
+            font-size: 17px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.2px !important;
+            text-decoration: none !important;
+            text-align: center !important;
+            padding: 15px 42px !important;
+            border-radius: 999px !important;
+            margin: 8px 0 20px 0 !important;
+            border: none !important;
+            box-shadow: 0 10px 22px -10px var(--gpp-destaque-sombra, rgba(240,90,34,0.4)) !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
         }
-        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-desconto-pequeno,
-        .gpp-op-<?php echo esc_attr($op_key); ?> .gpp-desconto-info {
-            color: <?php echo esc_attr($op_info['cor_destaque']); ?> !important;
+
+        .gpp-botao-consulta:hover,
+        .gpp-botao-consulta:focus {
+            color: #FFFFFF !important;
+            text-decoration: none !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 16px 30px -10px var(--gpp-destaque-sombra, rgba(240,90,34,0.45)) !important;
         }
-        <?php endforeach; ?>
 
         /* ===== COMPARAÇÃO ENTRE OPERADORAS (CARDS RESPONSIVOS) ===== */
         .gpp-comparacao-operadoras {
@@ -3574,7 +3650,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             flex-wrap: wrap !important;
             gap: 24px !important;
             align-items: stretch !important;
-            margin: 20px 0 !important;
+            margin: 24px 0 !important;
         }
 
         .gpp-card-operadora {
@@ -3583,30 +3659,167 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             display: flex !important;
             flex-direction: column !important;
             background: #FFFFFF !important;
-            border-radius: 20px !important;
+            border: 1px solid #e5eaf1 !important;
+            border-radius: 18px !important;
             overflow: hidden !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+            box-shadow: 0 14px 34px -18px rgba(15, 23, 42, 0.30) !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+        }
+
+        .gpp-card-operadora:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 20px 44px -18px rgba(15, 23, 42, 0.38) !important;
         }
 
         .gpp-card-operadora .gpp-card-header {
-            padding: 16px 18px !important;
+            padding: 16px 20px !important;
+            background-image: linear-gradient(135deg, var(--gpp-cor), var(--gpp-cor-escura)) !important;
             color: #FFFFFF !important;
-            font-weight: bold !important;
-            font-size: 20px !important;
+            font-weight: 700 !important;
+            font-size: 19px !important;
             text-align: center !important;
             letter-spacing: 0.5px !important;
         }
 
         .gpp-card-operadora .gpp-container-cidade {
-            padding: 0 16px 16px 16px !important;
+            margin: 0 !important;
+            padding: 0 16px 18px 16px !important;
         }
 
         .gpp-card-operadora .tabela-precos-hapvida {
             margin: 16px 0 0 0 !important;
+            border-radius: 12px !important;
             box-shadow: none !important;
         }
 
+        /* ===== TABELA COMPARATIVA DE COTAÇÃO (FAMÍLIA) ===== */
+        .gpp-comparativa-wrap {
+            overflow-x: auto;
+            margin: 0 0 10px 0;
+            background: #FFFFFF;
+            border: 1px solid #e5eaf1;
+            border-radius: 14px;
+            box-shadow: 0 10px 28px -16px rgba(15, 23, 42, 0.28);
+        }
+
+        .gpp-comparativa {
+            width: 100%;
+            min-width: 540px;
+            margin: 0 !important;
+            border: none !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            background: #FFFFFF;
+        }
+
+        .gpp-comparativa thead th {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+            color: #FFFFFF !important;
+            padding: 14px 16px !important;
+            font-size: 12.5px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.7px !important;
+            text-transform: uppercase !important;
+            text-align: left !important;
+            border: none !important;
+            border-bottom: 3px solid var(--gpp-destaque, #F05A22) !important;
+        }
+
+        .gpp-comparativa tbody td {
+            padding: 13px 16px !important;
+            font-size: 14.5px !important;
+            color: #334155 !important;
+            background: #FFFFFF;
+            border: none !important;
+            border-bottom: 1px solid #eef2f7 !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .gpp-comparativa tbody tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+
+        .gpp-comparativa tbody tr:last-child td {
+            border-bottom: none !important;
+        }
+
+        .gpp-comparativa .gpp-op-nome {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .gpp-comparativa tr.gpp-linha-referencia td {
+            background: var(--gpp-destaque-bg, #fff7f2) !important;
+        }
+
+        .gpp-comparativa tr.gpp-linha-referencia .gpp-op-nome,
+        .gpp-comparativa tr.gpp-linha-referencia .gpp-valor-ref {
+            color: var(--gpp-destaque, #F05A22);
+            font-weight: 800;
+        }
+
+        .gpp-badge-referencia {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            background: var(--gpp-destaque, #F05A22);
+            color: #FFFFFF;
+            padding: 2px 9px;
+            border-radius: 999px;
+            vertical-align: middle;
+        }
+
+        .gpp-comparativa .gpp-eco-mais-caro {
+            color: #c53030;
+            font-weight: 600;
+        }
+
+        .gpp-comparativa .gpp-eco-mais-barato {
+            color: #2f855a;
+            font-weight: 600;
+        }
+
+        .gpp-comparativa-nota {
+            font-size: 12.5px !important;
+            font-weight: normal !important;
+            color: #64748b !important;
+            margin: 6px 2px 20px 2px !important;
+        }
+
+        /* ===== RESPONSIVO ===== */
         @media screen and (max-width: 768px) {
+            .tabela-precos-hapvida {
+                border-radius: 12px !important;
+            }
+            .tabela-precos-hapvida table th {
+                font-size: 12.5px !important;
+                padding: 12px 14px !important;
+            }
+            .tabela-precos-hapvida table tbody tr td {
+                font-size: 14px !important;
+                padding: 11px 14px !important;
+            }
+            .gpp-desconto-info {
+                font-size: 13px !important;
+            }
+            .gpp-desconto-pequeno {
+                font-size: 12px !important;
+            }
+            .gpp-observacoes-info {
+                font-size: 13px !important;
+                padding: 15px 16px !important;
+            }
+            .gpp-botao-consulta {
+                font-size: 16px !important;
+                padding: 14px 30px !important;
+                width: 100% !important;
+                display: block !important;
+                margin: 10px auto !important;
+                box-sizing: border-box !important;
+            }
             .gpp-comparacao-operadoras {
                 gap: 16px !important;
             }
@@ -3615,6 +3828,258 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 min-width: 100% !important;
             }
         }
+        </style>
+        <?php
+    }
+
+    /**
+     * CSS compartilhado das telas administrativas do plugin (v8).
+     * Imprimido no topo de cada página do plugin no admin.
+     */
+    private function imprimir_estilos_admin() {
+        ?>
+        <style>
+            /* ===== GPP ADMIN (v8) ===== */
+            .gpp-admin h1 { display: flex; align-items: center; gap: 8px; }
+
+            .gpp-card {
+                background: #fff;
+                border: 1px solid #dcdfe5;
+                border-radius: 12px;
+                padding: 20px 24px;
+                margin: 20px 0;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+            }
+            .gpp-card > h2:first-child { margin-top: 0; }
+
+            .gpp-banner-op {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+                padding: 14px 20px;
+                margin-bottom: 16px;
+                color: #fff;
+                border-radius: 12px;
+                font-size: 15px;
+                box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.35);
+            }
+            .gpp-banner-op code {
+                background: rgba(255, 255, 255, 0.22);
+                color: #fff;
+                padding: 2px 8px;
+                border-radius: 6px;
+            }
+
+            /* ===== CHIPS DE SHORTCODE (clique para copiar) ===== */
+            .gpp-chip {
+                display: inline-block;
+                font-family: Consolas, Monaco, 'Courier New', monospace;
+                font-size: 11px;
+                line-height: 1.6;
+                background: #f6f8fb;
+                color: #1e293b;
+                border: 1px solid #cfd8e3;
+                border-radius: 6px;
+                padding: 3px 9px;
+                margin: 2px 4px 2px 0;
+                cursor: pointer;
+                transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .gpp-chip:hover {
+                background: #eef4fb;
+                border-color: #2271b1;
+                box-shadow: 0 1px 4px rgba(34, 113, 177, 0.25);
+            }
+            .gpp-chip-primario { background: #eaf3ff; border-color: #9ec2e8; color: #0a4b78; }
+            .gpp-chip-alerta   { background: #fff7e0; border-color: #e8c968; color: #7a5b00; }
+            .gpp-chip-roxo     { background: #f4ecfb; border-color: #c9a7e8; color: #5b2d83; }
+
+            /* ===== BLOCOS DE SHORTCODES NA LISTAGEM DE CIDADES ===== */
+            .gpp-bloco-sc {
+                margin: 0 0 8px;
+                padding: 8px 12px;
+                background: #f8fafc;
+                border: 1px solid #e5eaf1;
+                border-left: 3px solid var(--gpp-accent, #2271b1);
+                border-radius: 8px;
+            }
+            .gpp-bloco-sc-titulo {
+                display: block;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                color: var(--gpp-accent, #2271b1);
+                margin-bottom: 4px;
+            }
+            .gpp-bloco-sc small { color: #64748b; }
+
+            /* ===== MODAL ===== */
+            .gpp-modal {
+                position: fixed;
+                z-index: 100000;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                overflow: auto;
+                background: rgba(15, 23, 42, 0.55);
+            }
+            .gpp-modal-content {
+                background: #fff;
+                margin: 3% auto;
+                padding: 28px 32px;
+                border: none;
+                width: 90%;
+                max-width: 1200px;
+                border-radius: 14px;
+                max-height: 90vh;
+                overflow-y: auto;
+                box-shadow: 0 24px 64px -24px rgba(15, 23, 42, 0.5);
+            }
+            .gpp-modal-close {
+                color: #94a3b8;
+                float: right;
+                font-size: 26px;
+                font-weight: bold;
+                line-height: 1;
+                cursor: pointer;
+            }
+            .gpp-modal-close:hover,
+            .gpp-modal-close:focus { color: #0f172a; }
+
+            /* ===== SEÇÕES DO FORMULÁRIO (por tipo de plano) ===== */
+            .gpp-secao-tipo,
+            #gpp-secao-simples {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-left: 4px solid var(--gpp-accent, #2271b1);
+                border-radius: 12px;
+                box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+                padding: 20px 24px;
+                margin: 20px 0;
+            }
+            #gpp-secao-empresarial { --gpp-accent: #0066FF; }
+            #gpp-secao-individual  { --gpp-accent: #00A344; }
+            #gpp-secao-pme         { --gpp-accent: #FF6600; }
+            #gpp-secao-adesao      { --gpp-accent: #8E44AD; }
+            #gpp-secao-simples     { --gpp-accent: #2c3e50; }
+
+            .gpp-secao-tipo h3,
+            #gpp-secao-simples h3 {
+                color: var(--gpp-accent);
+                margin-top: 0;
+                border-bottom: 2px solid #eef2f7;
+                padding-bottom: 10px;
+            }
+            .gpp-secao-tipo > div {
+                background: #f8fafc;
+                border: 1px solid #eef2f7;
+                border-radius: 10px;
+            }
+            .gpp-secao-tipo label { color: #1e293b; }
+            .gpp-secao-tipo label:hover { color: var(--gpp-accent); }
+
+            .gpp-campos-acomodacao {
+                background: #f8fafc;
+                border: 1px solid #eef2f7;
+                border-left: 3px solid var(--gpp-accent, #2271b1);
+                border-radius: 10px;
+            }
+            .gpp-campos-acomodacao h4 {
+                color: var(--gpp-accent, #2271b1);
+                font-size: 15px;
+                margin-bottom: 12px;
+            }
+
+            .gpp-campos-wrapper {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                width: 100%;
+            }
+            .gpp-campo-total,
+            .gpp-campo-parcial {
+                flex: 1;
+                min-width: calc(50% - 10px);
+                box-sizing: border-box;
+            }
+            .gpp-campo-total label,
+            .gpp-campo-parcial label {
+                display: block;
+                margin-bottom: 8px;
+                color: #1e293b;
+                font-weight: 600;
+            }
+            .gpp-campo-total textarea,
+            .gpp-campo-parcial textarea,
+            #gpp-tabela-simples-json {
+                width: 100%;
+                background: #fff;
+                color: #1e293b;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                font-family: Consolas, Monaco, 'Courier New', monospace;
+                font-size: 12px;
+            }
+            .gpp-campo-total textarea:focus,
+            .gpp-campo-parcial textarea:focus,
+            #gpp-tabela-simples-json:focus {
+                border-color: var(--gpp-accent, #2271b1);
+                box-shadow: 0 0 0 1px var(--gpp-accent, #2271b1);
+            }
+
+            .gpp-status-json { font-weight: 600; margin-top: 5px; }
+            .gpp-status-success { color: #00803b; }
+            .gpp-status-error { color: #d63638; }
+
+            @media (max-width: 1200px) {
+                .gpp-campo-total,
+                .gpp-campo-parcial { min-width: 100%; }
+            }
+
+            /* ===== PAINEL DE REFERÊNCIA DE SHORTCODES ===== */
+            .gpp-ref-panel {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                margin: 20px 0;
+                overflow: hidden;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+            }
+            .gpp-ref-panel summary {
+                cursor: pointer;
+                padding: 14px 20px;
+                font-size: 15px;
+                font-weight: 600;
+                color: #fff;
+                list-style: none;
+            }
+            .gpp-ref-panel summary::-webkit-details-marker { display: none; }
+            .gpp-ref-panel summary::before { content: '▸ '; }
+            .gpp-ref-panel[open] summary::before { content: '▾ '; }
+            .gpp-ref-tabela {
+                width: 100%;
+                border-collapse: collapse;
+                background: #fff;
+                margin-bottom: 14px;
+            }
+            .gpp-ref-tabela th {
+                padding: 8px 12px;
+                text-align: left;
+                color: #fff;
+                font-size: 12px;
+            }
+            .gpp-ref-tabela td {
+                padding: 8px 12px;
+                border-bottom: 1px solid #eef2f7;
+                font-size: 13px;
+            }
+
+            /* Página de variáveis dinâmicas: chips de copiar */
+            .gpp-copiar-var { cursor: pointer; }
+            code.gpp-copiar-var:hover { background: #eef4fb !important; }
         </style>
         <?php
     }
@@ -3646,22 +4111,22 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         }
 
         // Helper local para imprimir uma linha de referência
-        $linha = function ($descricao, $padrao, $exemplo) use ($cor) {
+        $linha = function ($descricao, $padrao, $exemplo) {
             ?>
             <tr>
-                <td style="padding:8px 10px; border-bottom:1px solid #eee;"><?php echo esc_html($descricao); ?></td>
-                <td style="padding:8px 10px; border-bottom:1px solid #eee;">
-                    <code style="background:#f0f0f0; padding:2px 6px; border-radius:3px; font-size:12px;"><?php echo esc_html($padrao); ?></code>
+                <td><?php echo esc_html($descricao); ?></td>
+                <td>
+                    <code class="gpp-chip" style="cursor:default;"><?php echo esc_html($padrao); ?></code>
                 </td>
-                <td style="padding:8px 10px; border-bottom:1px solid #eee;">
-                    <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($exemplo); ?>" title="Clique para copiar" style="cursor:pointer; background:#e7f3ff; padding:2px 6px; border-radius:3px; font-size:12px; border:1px solid <?php echo esc_attr($cor); ?>;"><?php echo esc_html($exemplo); ?></code>
+                <td>
+                    <code class="gpp-shortcode-item gpp-chip gpp-chip-primario" data-shortcode="<?php echo esc_attr($exemplo); ?>" title="Clique para copiar"><?php echo esc_html($exemplo); ?></code>
                 </td>
             </tr>
             <?php
         };
         ?>
-        <details style="background:#fff; border:2px solid <?php echo esc_attr($cor); ?>; border-radius:5px; margin:20px 0; padding:0;">
-            <summary style="cursor:pointer; padding:15px 20px; font-size:16px; font-weight:bold; color:#fff; background:<?php echo esc_attr($cor); ?>; border-radius:3px;">
+        <details class="gpp-ref-panel">
+            <summary style="background: linear-gradient(135deg, <?php echo esc_attr($cor); ?>, <?php echo esc_attr($this->escurecer_cor($cor, 0.25)); ?>);">
                 📚 Referência de Shortcodes — <?php echo esc_html($op['nome']); ?>
                 <?php if ($prefixo !== ''): ?>(prefixo <code style="background:rgba(255,255,255,0.25); color:#fff; padding:1px 5px; border-radius:3px;"><?php echo esc_html($prefixo); ?></code>)<?php endif; ?>
             </summary>
@@ -3675,12 +4140,12 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </p>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">🧾 Tabela e valores</h3>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <thead>
                         <tr style="background:<?php echo esc_attr($cor); ?>; color:#fff;">
-                            <th style="padding:8px 10px; text-align:left;">O que faz</th>
-                            <th style="padding:8px 10px; text-align:left;">Padrão</th>
-                            <th style="padding:8px 10px; text-align:left;">Exemplo (clique p/ copiar)</th>
+                            <th>O que faz</th>
+                            <th>Padrão</th>
+                            <th>Exemplo (clique p/ copiar)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3696,7 +4161,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
 
                 <h3 style="color:#8E44AD; margin-bottom:5px;">⚖️ Comparar operadoras (SEM prefixo)</h3>
                 <p style="margin:0 0 8px; color:#666; font-size:13px;">Mostra a MESMA cidade em todas as operadoras, em cards responsivos. Use o slug <strong>sem</strong> prefixo.</p>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Comparar todas (sem tipo)', '[comparar_CIDADE]', '[comparar_' . $slug_base_ex . ']');
@@ -3707,7 +4172,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </table>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">📅 Data (global)</h3>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Ano atual', '[ano_atual]', '[ano_atual]');
@@ -3728,12 +4193,12 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </p>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">🧾 Tabelas de preço</h3>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <thead>
                         <tr style="background:<?php echo esc_attr($cor); ?>; color:#fff;">
-                            <th style="padding:8px 10px; text-align:left;">O que faz</th>
-                            <th style="padding:8px 10px; text-align:left;">Padrão</th>
-                            <th style="padding:8px 10px; text-align:left;">Exemplo (clique p/ copiar)</th>
+                            <th>O que faz</th>
+                            <th>Padrão</th>
+                            <th>Exemplo (clique p/ copiar)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3747,7 +4212,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </table>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">💰 Valores resumidos da cidade</h3>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Menor valor (texto)', '[' . $prefixo . 'CIDADE_menorvalor]', '[' . $cidade_ex . '_menorvalor]');
@@ -3758,8 +4223,8 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </table>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">🔢 Valor de uma faixa etária</h3>
-                <p style="margin:0 0 8px; color:#666; font-size:13px;">Siglas do tipo: <code>emp</code>, <code>ind</code>, <code>pme</code>, <code>ade</code>. Acomodação: <code>ambulatorial</code>, <code>enfermaria</code>, <code>apartamento</code>. Faixas registradas: <code>0</code> (primeira), <code>1</code> e <code>9</code> (última). Sem o número = primeira faixa.</p>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <p style="margin:0 0 8px; color:#666; font-size:13px;">Siglas do tipo: <code>emp</code>, <code>ind</code>, <code>pme</code>, <code>ade</code>. Acomodação: <code>ambulatorial</code>, <code>enfermaria</code>, <code>apartamento</code>. Faixas registradas: <code>0</code> (primeira), <code>1</code> (segunda) e a <strong>última</strong> da tabela (ex.: <code>9</code> numa tabela de 10 faixas). Sem o número = primeira faixa.</p>
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Faixa específica (total)', '[' . $prefixo . 'CIDADE_SIGLA_ACOMtotal_N]', '[' . $cidade_ex . '_emp_ambulatorialtotal_0]');
@@ -3771,7 +4236,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
 
                 <h3 style="color:#8E44AD; margin-bottom:5px;">⚖️ Comparar operadoras (SEM prefixo)</h3>
                 <p style="margin:0 0 8px; color:#666; font-size:13px;">Mostra a MESMA cidade em todas as operadoras, em cards responsivos. Use sempre o slug <strong>sem</strong> prefixo.</p>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Comparar (total)', '[comparar_CIDADE_TIPO_total]', '[comparar_' . $slug_base_ex . '_empresarial_total]');
@@ -3783,7 +4248,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </table>
 
                 <h3 style="color:<?php echo esc_attr($cor); ?>; margin-bottom:5px;">📅 Data (global, qualquer operadora)</h3>
-                <table style="width:100%; border-collapse:collapse; background:#fafafa;">
+                <table class="gpp-ref-tabela">
                     <tbody>
                         <?php
                         $linha('Ano atual', '[ano_atual]', '[ano_atual]');
@@ -3810,9 +4275,10 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
     public function pagina_admin() {
         $operadora_inicial = $this->sanitizar_operadora(isset($_GET['operadora']) ? $_GET['operadora'] : 'hapvida');
         $cfg_inicial = $this->operadoras[$operadora_inicial];
+        $this->imprimir_estilos_admin();
         ?>
-        <div class="wrap">
-            <h1>Gerenciador de Preços de Planos de Saúde</h1>
+        <div class="wrap gpp-admin">
+            <h1>💰 Gerenciador de Preços de Planos de Saúde</h1>
 
             <h2 class="nav-tab-wrapper" style="margin-bottom: 20px;">
                 <?php foreach ($this->operadoras as $op_key => $op_info):
@@ -3828,8 +4294,8 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             <button id="gpp-adicionar-cidade" class="button button-primary" style="margin-bottom: 20px;">Adicionar Nova Cidade em <span id="gpp-add-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></button>
 
             <!-- ===== SISTEMA GLOBAL DE DESCONTOS ===== -->
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border: 2px solid #0054b8; border-radius: 5px;">
-                <h2 style="margin-top: 0; color: #0054b8;">⚙️ Aplicar Desconto Global em Todas as Cidades de <span id="gpp-desc-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></h2>
+            <div class="gpp-card">
+                <h2 style="margin-top: 0;">⚙️ Aplicar Desconto Global em Todas as Cidades de <span id="gpp-desc-op-nome"><?php echo esc_html($cfg_inicial['nome']); ?></span></h2>
                 <p style="color: #666;">Configure um desconto que será aplicado em <strong>TODAS as cidades</strong> da operadora selecionada na aba acima.</p>
 
                 <div style="margin: 15px 0;">
@@ -3862,10 +4328,10 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
             ?>
             <div class="gpp-op-panel" data-operadora="<?php echo esc_attr($operadora_ativa); ?>"<?php echo $painel_ativo ? '' : ' style="display:none;"'; ?>>
 
-                <div style="padding: 10px 15px; margin-bottom: 15px; background: <?php echo esc_attr($operadora_cfg['cor']); ?>; color: #fff; border-radius: 5px; font-size: 16px;">
+                <div class="gpp-banner-op" style="background: linear-gradient(135deg, <?php echo esc_attr($operadora_cfg['cor']); ?>, <?php echo esc_attr($this->escurecer_cor($operadora_cfg['cor'], 0.25)); ?>);">
                     Gerenciando operadora: <strong><?php echo esc_html($operadora_cfg['nome']); ?></strong>
                     <?php if ($operadora_cfg['prefixo'] !== ''): ?>
-                        &nbsp;—&nbsp; prefixo dos shortcodes: <code style="background: rgba(255,255,255,0.25); color: #fff; padding: 2px 6px; border-radius: 3px;"><?php echo esc_html($operadora_cfg['prefixo']); ?></code>
+                        &nbsp;—&nbsp; prefixo dos shortcodes: <code><?php echo esc_html($operadora_cfg['prefixo']); ?></code>
                     <?php else: ?>
                         &nbsp;—&nbsp; shortcodes <strong>sem prefixo</strong>
                     <?php endif; ?>
@@ -3958,69 +4424,64 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                                         $tem_tabela_simples = !empty($cidade['tabela_simples']);
                                     ?>
                                         <?php if ($tem_tabela_simples): ?>
-                                            <div style="margin-bottom: 8px; padding: 6px; background: #f8f9fa; border-left: 3px solid <?php echo esc_attr($operadora_cfg['cor']); ?>; border-radius: 2px;">
-                                                <strong style="color: <?php echo esc_attr($operadora_cfg['cor']); ?>; font-size: 10px;">🧾 TABELA:</strong>
-                                                <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>]" style="cursor: pointer; background: #e7f3ff; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 11px; border: 1px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">[<?php echo esc_html($cidade['shortcode']); ?>]</code>
-                                                <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_sd]" style="cursor: pointer; background: #eee; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 11px; border: 1px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">[<?php echo esc_html($cidade['shortcode']); ?>_sd]</code>
+                                            <div class="gpp-bloco-sc" style="--gpp-accent: <?php echo esc_attr($operadora_cfg['cor']); ?>;">
+                                                <strong class="gpp-bloco-sc-titulo">🧾 Tabela</strong>
+                                                <code class="gpp-shortcode-item gpp-chip gpp-chip-primario" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>]">[<?php echo esc_html($cidade['shortcode']); ?>]</code>
+                                                <code class="gpp-shortcode-item gpp-chip" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_sd]">[<?php echo esc_html($cidade['shortcode']); ?>_sd]</code>
                                                 <br>
-                                                <strong style="color: #f57c00; font-size: 10px;">💰 VALORES:</strong>
-                                                <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]" style="cursor: pointer; background: #fff3cd; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
-                                                <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_maiorvalor]" style="cursor: pointer; background: #fff3cd; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_maiorvalor]</code>
+                                                <strong class="gpp-bloco-sc-titulo" style="color: #b45309; margin-top: 4px;">💰 Valores</strong>
+                                                <code class="gpp-shortcode-item gpp-chip gpp-chip-alerta" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
+                                                <code class="gpp-shortcode-item gpp-chip gpp-chip-alerta" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_maiorvalor]">[<?php echo esc_html($cidade['shortcode']); ?>_maiorvalor]</code>
                                             </div>
-                                            <div style="margin-top: 6px; padding: 6px; background: #f3e8ff; border-left: 3px solid #8E44AD; border-radius: 2px;">
-                                                <strong style="color: #8E44AD; font-size: 10px;">⚖️ COMPARAR:</strong>
-                                                <code class="gpp-shortcode-item" data-shortcode="[comparar_<?php echo esc_attr($slug_base_cidade); ?>]" style="cursor: pointer; background: #ede0ff; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid #8E44AD;">[comparar_<?php echo esc_html($slug_base_cidade); ?>]</code>
+                                            <div class="gpp-bloco-sc" style="--gpp-accent: #8E44AD;">
+                                                <strong class="gpp-bloco-sc-titulo">⚖️ Comparar</strong>
+                                                <code class="gpp-shortcode-item gpp-chip gpp-chip-roxo" data-shortcode="[comparar_<?php echo esc_attr($slug_base_cidade); ?>]">[comparar_<?php echo esc_html($slug_base_cidade); ?>]</code>
                                             </div>
                                         <?php else: ?>
                                             <em>Tabela não cadastrada</em>
                                         <?php endif; ?>
                                     <?php else: ?>
                                     <?php if ($menor['shortcode']): ?>
-                                        <div style="margin-bottom: 10px; padding: 8px; background: #fff9e6; border-left: 4px solid #ffc107; border-radius: 3px;">
-                                            <strong style="color: #f57c00; font-size: 10px;">💰 MENOR VALOR:</strong><br>
-                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
-                                            <small style="color: #f57c00; font-weight: bold;"><?php echo esc_html($menor['valor']); ?></small>
+                                        <div class="gpp-bloco-sc" style="--gpp-accent: #f0a000;">
+                                            <strong class="gpp-bloco-sc-titulo" style="color: #b45309;">💰 Menor valor</strong>
+                                            <code class="gpp-shortcode-item gpp-chip gpp-chip-alerta" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menorvalor]">[<?php echo esc_html($cidade['shortcode']); ?>_menorvalor]</code>
+                                            <small style="font-weight: bold; color: #b45309;"><?php echo esc_html($menor['valor']); ?></small>
                                             <br>
-                                            <strong style="color: #f57c00; font-size: 10px;">📊 MENOR TABELA:</strong><br>
-                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menortabela]" style="cursor: pointer; background: #fff3cd; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #ffc107;">[<?php echo esc_html($cidade['shortcode']); ?>_menortabela]</code>
-                                            <small style="color: #888; font-size: 10px;">Tabela completa do plano mais barato</small>
+                                            <strong class="gpp-bloco-sc-titulo" style="color: #b45309; margin-top: 4px;">📊 Menor tabela</strong>
+                                            <code class="gpp-shortcode-item gpp-chip gpp-chip-alerta" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_menortabela]">[<?php echo esc_html($cidade['shortcode']); ?>_menortabela]</code>
+                                            <small>Tabela completa do plano mais barato</small>
                                         </div>
                                     <?php endif; ?>
 
                                     <?php if ($maior['shortcode']): ?>
-                                        <div style="margin-bottom: 10px; padding: 8px; background: #f0f4ff; border-left: 4px solid #0054b8; border-radius: 3px;">
-                                            <strong style="color: #0054b8; font-size: 10px;">💎 MAIOR VALOR:</strong><br>
-                                            <code class="gpp-shortcode-item" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_maiorvalor]" style="cursor: pointer; background: #e7f3ff; padding: 3px 8px; margin: 2px 5px 2px 0; display: inline-block; border-radius: 3px; font-size: 11px; border: 1px solid #0054b8;">[<?php echo esc_html($cidade['shortcode']); ?>_maiorvalor]</code>
-                                            <small style="color: #0054b8; font-weight: bold;"><?php echo esc_html($maior['valor']); ?></small>
+                                        <div class="gpp-bloco-sc" style="--gpp-accent: #0054b8;">
+                                            <strong class="gpp-bloco-sc-titulo">💎 Maior valor</strong>
+                                            <code class="gpp-shortcode-item gpp-chip gpp-chip-primario" data-shortcode="[<?php echo esc_attr($cidade['shortcode']); ?>_maiorvalor]">[<?php echo esc_html($cidade['shortcode']); ?>_maiorvalor]</code>
+                                            <small style="font-weight: bold; color: #0a4b78;"><?php echo esc_html($maior['valor']); ?></small>
                                         </div>
                                     <?php endif; ?>
-                                    
+
                                     <?php foreach ($shortcodes_por_tipo as $tipo_key => $tipo_data): ?>
-                                        <div style="margin-bottom: 8px; padding: 6px; background: #f8f9fa; border-left: 3px solid <?php echo $tipo_data['cor']; ?>; border-radius: 2px;">
-                                            <strong style="color: <?php echo $tipo_data['cor']; ?>; font-size: 10px;"><?php echo $tipo_data['emoji']; ?> <?php echo strtoupper($tipo_data['nome']); ?>:</strong><br>
-                                            <div style="margin-top: 3px;">
-                                                <span style="font-size: 9px; color: #666; display: inline-block; margin-right: 3px;">Total:</span>
-                                                <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($tipo_data['total']); ?>" style="cursor: pointer; background: #e7f3ff; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid <?php echo $tipo_data['cor']; ?>;"><?php echo esc_html($tipo_data['total']); ?></code>
-                                                
-                                                <span style="font-size: 9px; color: #666; display: inline-block; margin: 0 3px 0 8px;">Parcial:</span>
-                                                <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($tipo_data['parcial']); ?>" style="cursor: pointer; background: #fff3e0; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid <?php echo $tipo_data['cor']; ?>;"><?php echo esc_html($tipo_data['parcial']); ?></code>
-                                            </div>
+                                        <div class="gpp-bloco-sc" style="--gpp-accent: <?php echo esc_attr($tipo_data['cor']); ?>;">
+                                            <strong class="gpp-bloco-sc-titulo"><?php echo $tipo_data['emoji']; ?> <?php echo esc_html($tipo_data['nome']); ?></strong>
+                                            <small>Total:</small>
+                                            <code class="gpp-shortcode-item gpp-chip gpp-chip-primario" data-shortcode="<?php echo esc_attr($tipo_data['total']); ?>"><?php echo esc_html($tipo_data['total']); ?></code>
+                                            <small>Parcial:</small>
+                                            <code class="gpp-shortcode-item gpp-chip gpp-chip-alerta" data-shortcode="<?php echo esc_attr($tipo_data['parcial']); ?>"><?php echo esc_html($tipo_data['parcial']); ?></code>
                                         </div>
                                     <?php endforeach; ?>
 
                                     <?php if (!empty($shortcodes_por_tipo)):
                                         $slug_base_cidade = $this->obter_slug_base_cidade($cidade);
                                     ?>
-                                        <div style="margin-top: 10px; padding: 6px; background: #f3e8ff; border-left: 3px solid #8E44AD; border-radius: 2px;">
-                                            <strong style="color: #8E44AD; font-size: 10px;">⚖️ COMPARAR OPERADORAS (mesma cidade):</strong><br>
-                                            <div style="margin-top: 3px;">
-                                                <?php foreach ($shortcodes_por_tipo as $tipo_key => $tipo_data):
-                                                    $sc_comp_total = '[comparar_' . $slug_base_cidade . '_' . $tipo_key . '_total]';
-                                                ?>
-                                                    <code class="gpp-shortcode-item" data-shortcode="<?php echo esc_attr($sc_comp_total); ?>" style="cursor: pointer; background: #ede0ff; padding: 2px 6px; margin: 1px; display: inline-block; border-radius: 2px; font-size: 10px; border: 1px solid #8E44AD;"><?php echo esc_html($sc_comp_total); ?></code>
-                                                <?php endforeach; ?>
-                                            </div>
-                                            <small style="color: #666; font-size: 9px;">Mostra Hapvida/Amil/Unimed/SulAmérica juntas. Troque <code>_total</code> por <code>_parcial</code> ou remova o sufixo para ambas.</small>
+                                        <div class="gpp-bloco-sc" style="--gpp-accent: #8E44AD;">
+                                            <strong class="gpp-bloco-sc-titulo">⚖️ Comparar operadoras (mesma cidade)</strong>
+                                            <?php foreach ($shortcodes_por_tipo as $tipo_key => $tipo_data):
+                                                $sc_comp_total = '[comparar_' . $slug_base_cidade . '_' . $tipo_key . '_total]';
+                                            ?>
+                                                <code class="gpp-shortcode-item gpp-chip gpp-chip-roxo" data-shortcode="<?php echo esc_attr($sc_comp_total); ?>"><?php echo esc_html($sc_comp_total); ?></code>
+                                            <?php endforeach; ?>
+                                            <br><small>Mostra Hapvida/Amil/Unimed/SulAmérica juntas. Troque <code>_total</code> por <code>_parcial</code> ou remova o sufixo para ambas.</small>
                                         </div>
                                     <?php endif; ?>
 
@@ -4045,7 +4506,7 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </tbody>
             </table>
             
-            <div style="background: #fff; padding: 20px; margin: 20px 0; border-left: 4px solid #0054b8;">
+            <div class="gpp-card" style="border-left: 4px solid <?php echo esc_attr($operadora_cfg['cor']); ?>;">
                 <h2>Como usar</h2>
                 <?php if ($is_simples): ?>
                 <ol>
@@ -4182,15 +4643,15 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                     </table>
 
                     <!-- ===== MODO SIMPLES: tabela única (Faixa Etária → Valor) ===== -->
-                    <div id="gpp-secao-simples" style="display:none; padding: 20px; margin: 20px 0; border-radius: 5px; background: #2c3e50;">
-                        <h3 style="margin-top: 0; color: #fff;">🧾 Tabela de Preços — <span id="gpp-simples-op-nome"></span></h3>
-                        <p style="color: #fff;">Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores:</p>
-                        <label style="display:block; color:#fff; font-weight:bold; margin-bottom:6px;">JSON da tabela</label>
+                    <div id="gpp-secao-simples" style="display:none;">
+                        <h3>🧾 Tabela de Preços — <span id="gpp-simples-op-nome"></span></h3>
+                        <p>Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores:</p>
+                        <label style="display:block; font-weight:bold; margin-bottom:6px;">JSON da tabela</label>
                         <textarea class="gpp-json-field large-text code" id="gpp-tabela-simples-json" rows="10" placeholder='[
   {"faixa_etaria": "0 a 18 anos", "valor": "199,90"},
   {"faixa_etaria": "19 a 23 anos", "valor": "229,90"}
-]' style="width:100%; background:#fff; color:#333; border-radius:4px;"></textarea>
-                        <div class="gpp-status-json" id="gpp-status-tabela-simples" style="color:#fff; font-weight:bold; margin-top:5px;"></div>
+]'></textarea>
+                        <div class="gpp-status-json" id="gpp-status-tabela-simples"></div>
                     </div>
 
                     <!-- Seções para cada tipo de plano -->
@@ -4204,17 +4665,17 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
 
                     foreach ($tipos as $tipo_key => $tipo_info):
                     ?>
-                        <div class="gpp-secao-tipo" id="gpp-secao-<?php echo $tipo_key; ?>" style="display: none; padding: 20px; margin: 20px 0; border-radius: 5px;">
+                        <div class="gpp-secao-tipo" id="gpp-secao-<?php echo $tipo_key; ?>" style="display: none;">
                             <h3 style="margin-top: 0;"><?php echo $tipo_info['emoji']; ?> Planos <?php echo $tipo_info['nome']; ?></h3>
 
                             <div style="margin: 15px 0; padding: 15px;">
-                                <label style="color: #FFFFFF; display: block; margin-bottom: 5px;"><strong>📝 Nota / Observação do plano <?php echo $tipo_info['nome']; ?> (opcional):</strong></label>
+                                <label style="display: block; margin-bottom: 5px;"><strong>📝 Nota / Observação do plano <?php echo $tipo_info['nome']; ?> (opcional):</strong></label>
                                 <textarea class="large-text" id="gpp-nota-<?php echo $tipo_key; ?>" rows="3" placeholder="Ex.: Plano voltado para empresas a partir de 2 vidas..."></textarea>
-                                <p style="color: #FFFFFF; font-size: 12px; margin: 5px 0 0 0;">Anotação interna (uso administrativo). <strong>Não</strong> é exibida no site.</p>
+                                <p style="color: #64748b; font-size: 12px; margin: 5px 0 0 0;">Anotação interna (uso administrativo). <strong>Não</strong> é exibida no site.</p>
                             </div>
 
                             <div style="margin: 15px 0; padding: 15px;">
-                                <p style="color: #FFFFFF;"><strong>Selecione as acomodações disponíveis:</strong></p>
+                                <p><strong>Selecione as acomodações disponíveis:</strong></p>
                                 <label style="display: block; margin: 5px 0;">
                                     <input type="checkbox" class="gpp-acomodacao-check" data-tipo="<?php echo $tipo_key; ?>" data-acomodacao="ambulatorial">
                                     🏥 Ambulatorial
@@ -4268,290 +4729,6 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
                 </form>
             </div>
         </div>
-        
-        <style>
-            .gpp-modal {
-                position: fixed;
-                z-index: 100000;
-                left: 0;
-                top: 0;
-                width: 100%;
-                height: 100%;
-                overflow: auto;
-                background-color: rgba(0,0,0,0.7);
-            }
-            
-            .gpp-modal-content {
-                background-color: #fefefe;
-                margin: 2% auto;
-                padding: 20px;
-                border: 1px solid #888;
-                width: 90%;
-                max-width: 1200px;
-                border-radius: 5px;
-                max-height: 90vh;
-                overflow-y: auto;
-            }
-            
-            .gpp-modal-close {
-                color: #aaa;
-                float: right;
-                font-size: 28px;
-                font-weight: bold;
-                cursor: pointer;
-            }
-            
-            .gpp-modal-close:hover,
-            .gpp-modal-close:focus {
-                color: black;
-            }
-            
-            .gpp-status-success {
-                color: #46b450;
-                margin-top: 5px;
-            }
-            
-            .gpp-status-error {
-                color: #dc3232;
-                margin-top: 5px;
-            }
-            
-            .gpp-shortcode-item:hover {
-                opacity: 0.8;
-                transform: scale(1.05);
-            }
-            
-            /* ===== CORES ESPECÍFICAS PARA CADA TIPO DE PLANO ===== */
-            
-            /* EMPRESARIAL - AZUL VIBRANTE */
-            #gpp-secao-empresarial {
-                border-color: #0066FF !important;
-                border-width: 4px !important;
-                background: #0066FF !important;
-            }
-            
-            #gpp-secao-empresarial h3 {
-                color: #FFFFFF !important;
-                border-bottom: 3px solid #FFFFFF;
-                padding-bottom: 10px;
-            }
-            
-            #gpp-secao-empresarial .gpp-campos-acomodacao {
-                border-left-color: #0066FF !important;
-                border-left-width: 5px !important;
-                background: #3385FF !important;
-            }
-            
-            #gpp-secao-empresarial .gpp-campos-acomodacao h4 {
-                color: #FFFFFF !important;
-            }
-            
-            #gpp-secao-empresarial label {
-                background: #4D94FF !important;
-                color: #FFFFFF !important;
-                padding: 8px;
-                border-radius: 4px;
-                transition: all 0.2s;
-            }
-            
-            #gpp-secao-empresarial label:hover {
-                background: #1A75FF !important;
-                transform: translateX(3px);
-            }
-            
-            #gpp-secao-empresarial > div {
-                background: #1A75FF !important;
-                padding: 15px;
-                border-radius: 4px;
-            }
-            
-            /* INDIVIDUAL - VERDE VIBRANTE */
-            #gpp-secao-individual {
-                border-color: #00C851 !important;
-                border-width: 4px !important;
-                background: #00C851 !important;
-            }
-            
-            #gpp-secao-individual h3 {
-                color: #FFFFFF !important;
-                border-bottom: 3px solid #FFFFFF;
-                padding-bottom: 10px;
-            }
-            
-            #gpp-secao-individual .gpp-campos-acomodacao {
-                border-left-color: #00C851 !important;
-                border-left-width: 5px !important;
-                background: #2DD36F !important;
-            }
-            
-            #gpp-secao-individual .gpp-campos-acomodacao h4 {
-                color: #FFFFFF !important;
-            }
-            
-            #gpp-secao-individual label {
-                background: #4DDB82 !important;
-                color: #FFFFFF !important;
-                padding: 8px;
-                border-radius: 4px;
-                transition: all 0.2s;
-            }
-            
-            #gpp-secao-individual label:hover {
-                background: #1ACB5E !important;
-                transform: translateX(3px);
-            }
-            
-            #gpp-secao-individual > div {
-                background: #1ACB5E !important;
-                padding: 15px;
-                border-radius: 4px;
-            }
-            
-            /* PME - LARANJA FORTE */
-            #gpp-secao-pme {
-                border-color: #FF6600 !important;
-                border-width: 4px !important;
-                background: #FF6600 !important;
-            }
-            
-            #gpp-secao-pme h3 {
-                color: #FFFFFF !important;
-                border-bottom: 3px solid #FFFFFF;
-                padding-bottom: 10px;
-            }
-            
-            #gpp-secao-pme .gpp-campos-acomodacao {
-                border-left-color: #FF6600 !important;
-                border-left-width: 5px !important;
-                background: #FF8533 !important;
-            }
-            
-            #gpp-secao-pme .gpp-campos-acomodacao h4 {
-                color: #FFFFFF !important;
-            }
-            
-            #gpp-secao-pme label {
-                background: #FF9D4D !important;
-                color: #FFFFFF !important;
-                padding: 8px;
-                border-radius: 4px;
-                transition: all 0.2s;
-            }
-            
-            #gpp-secao-pme label:hover {
-                background: #FF751A !important;
-                transform: translateX(3px);
-            }
-            
-            #gpp-secao-pme > div {
-                background: #FF751A !important;
-                padding: 15px;
-                border-radius: 4px;
-            }
-            
-            /* ADESÃO - ROXO FORTE */
-            #gpp-secao-adesao {
-                border-color: #8E44AD !important;
-                border-width: 4px !important;
-                background: #8E44AD !important;
-            }
-            
-            #gpp-secao-adesao h3 {
-                color: #FFFFFF !important;
-                border-bottom: 3px solid #FFFFFF;
-                padding-bottom: 10px;
-            }
-            
-            #gpp-secao-adesao .gpp-campos-acomodacao {
-                border-left-color: #8E44AD !important;
-                border-left-width: 5px !important;
-                background: #A569BD !important;
-            }
-            
-            #gpp-secao-adesao .gpp-campos-acomodacao h4 {
-                color: #FFFFFF !important;
-            }
-            
-            #gpp-secao-adesao label {
-                background: #BB8FCE !important;
-                color: #FFFFFF !important;
-                padding: 8px;
-                border-radius: 4px;
-                transition: all 0.2s;
-            }
-            
-            #gpp-secao-adesao label:hover {
-                background: #9B59B6 !important;
-                transform: translateX(3px);
-            }
-            
-            #gpp-secao-adesao > div {
-                background: #9B59B6 !important;
-                padding: 15px;
-                border-radius: 4px;
-            }
-            
-            /* Melhorias visuais gerais */
-            .gpp-secao-tipo {
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            
-            .gpp-campos-acomodacao h4 {
-                font-size: 16px;
-                margin-bottom: 15px;
-            }
-            
-            /* CAMPOS LADO A LADO - 50% CADA */
-            .gpp-campos-wrapper {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 20px;
-                width: 100%;
-            }
-            
-            .gpp-campo-total,
-            .gpp-campo-parcial {
-                flex: 1;
-                min-width: calc(50% - 10px);
-                box-sizing: border-box;
-            }
-            
-            .gpp-campo-total label,
-            .gpp-campo-parcial label {
-                display: block;
-                margin-bottom: 8px;
-                color: #FFFFFF;
-                font-weight: bold;
-            }
-            
-            .gpp-campo-total textarea,
-            .gpp-campo-parcial textarea {
-                width: 100%;
-                background: #FFFFFF !important;
-                color: #333333 !important;
-                border: 2px solid rgba(255,255,255,0.5) !important;
-                border-radius: 4px;
-            }
-            
-            .gpp-campo-total textarea:focus,
-            .gpp-campo-parcial textarea:focus {
-                border-color: #FFFFFF !important;
-                box-shadow: 0 0 5px rgba(255,255,255,0.8) !important;
-            }
-            
-            .gpp-status-json {
-                color: #FFFFFF !important;
-                font-weight: bold;
-                margin-top: 5px;
-            }
-            
-            @media (max-width: 1200px) {
-                .gpp-campo-total,
-                .gpp-campo-parcial {
-                    min-width: 100%;
-                }
-            }
-        </style>
         
         <script>
         jQuery(document).ready(function($) {
@@ -5198,7 +5375,15 @@ private function renderizar_tabela_cidade($cidade_data, $tipo_plano, $mostrar_di
         
         // Processa dados dos planos
         if (isset($_POST['dados_planos']) && is_array($_POST['dados_planos'])) {
+            // SEGURANÇA: só aceita chaves no formato conhecido
+            // ({tipo}_{acomodacao}_{ativo|total|parcial} ou {tipo}_nota),
+            // impedindo que chaves arbitrárias sobrescrevam campos internos
+            // como "nome", "shortcode" ou "operadora".
+            $padrao_campo = '/^(empresarial|individual|pme|adesao)_((ambulatorial|enfermaria|apartamento)_(ativo|total|parcial)|nota)$/';
             foreach ($_POST['dados_planos'] as $campo => $valor) {
+                if (!preg_match($padrao_campo, $campo)) {
+                    continue;
+                }
                 if (strpos($campo, '_ativo') !== false) {
                     // Campo booleano
                     $nova_cidade[$campo] = ($valor === 'true' || $valor === true || $valor === 1 || $valor === '1');
@@ -5448,15 +5633,13 @@ function gpp_get_valor_cidade($cidade_slug, $tipo_plano, $acomodacao, $copartici
         }
     }
     
-    $preco_limpo = str_replace(array('R$', ' ', '.'), '', $valor);
-    $preco_limpo = str_replace(',', '.', $preco_limpo);
-    $preco_numerico = floatval($preco_limpo);
-    
+    $preco_numerico = Gerenciador_Precos_Planos::converter_valor_para_numero($valor);
+
     if ($desconto > 0) {
         $multiplicador = 1 - ($desconto / 100);
         $preco_com_desconto = $preco_numerico * $multiplicador;
         return 'R$ ' . number_format($preco_com_desconto, 2, ',', '.');
     }
-    
+
     return 'R$ ' . number_format($preco_numerico, 2, ',', '.');
 }
