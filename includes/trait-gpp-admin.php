@@ -410,7 +410,23 @@ trait GPP_Admin {
                 
                 <form id="gpp-form-cidade">
                     <input type="hidden" id="gpp-cidade-id" value="">
-                    
+
+                    <!-- ===== ABAS DO MODAL =====
+                         O formulário inteiro é dividido em abas: Dados da cidade,
+                         Descontos e uma aba por tipo de plano marcado (ou a aba
+                         "Tabela de preços" nas operadoras de tabela única). -->
+                    <div id="gpp-tipos-tabs" class="gpp-tipos-tabs">
+                        <button type="button" class="gpp-tab-tipo gpp-tab-tipo-ativa" data-alvo="dados" style="--gpp-accent:#0054b8;">🏙️ Dados da cidade</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="descontos" style="--gpp-accent:#c2410c;">💸 Descontos</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="simples" id="gpp-tab-simples" style="display:none; --gpp-accent:#2c3e50;">🧾 Tabela de preços</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="empresarial" data-tipo="empresarial" style="display:none; --gpp-accent:#0066FF;">📈 Empresarial</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="individual" data-tipo="individual" style="display:none; --gpp-accent:#00A344;">👤 Individual</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="pme" data-tipo="pme" style="display:none; --gpp-accent:#FF6600;">🏢 PME</button>
+                        <button type="button" class="gpp-tab-tipo" data-alvo="adesao" data-tipo="adesao" style="display:none; --gpp-accent:#8E44AD;">🤝 Adesão</button>
+                    </div>
+
+                    <!-- ===================== ABA: DADOS DA CIDADE ===================== -->
+                    <div class="gpp-painel-modal" data-painel="dados">
                     <table class="form-table">
                         <tr>
                             <th><label for="gpp-nome">Nome da Cidade</label></th>
@@ -419,7 +435,36 @@ trait GPP_Admin {
                                 <p class="description">O shortcode será gerado automaticamente</p>
                             </td>
                         </tr>
-                        
+
+                        <tr class="gpp-row-completo">
+                            <th><label>Tipos de Planos</label></th>
+                            <td>
+                                <p><strong>Selecione quais tipos de planos esta cidade terá:</strong></p>
+                                <label class="gpp-check-pilula" style="--gpp-accent:#0066FF;">
+                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="empresarial" id="gpp-tipo-empresarial">
+                                    📈 Empresarial
+                                </label>
+                                <label class="gpp-check-pilula" style="--gpp-accent:#00A344;">
+                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="individual" id="gpp-tipo-individual">
+                                    👤 Individual
+                                </label>
+                                <label class="gpp-check-pilula" style="--gpp-accent:#FF6600;">
+                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="pme" id="gpp-tipo-pme">
+                                    🏢 PME
+                                </label>
+                                <label class="gpp-check-pilula" style="--gpp-accent:#8E44AD;">
+                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="adesao" id="gpp-tipo-adesao">
+                                    🤝 Adesao
+                                </label>
+                                <p class="description" style="margin-top: 8px;">Cada tipo marcado vira uma <strong>aba</strong> na barra acima — os preços são editados lá.</p>
+                            </td>
+                        </tr>
+                    </table>
+                    </div>
+
+                    <!-- ===================== ABA: DESCONTOS ===================== -->
+                    <div class="gpp-painel-modal" data-painel="descontos" style="display:none;">
+                    <table class="form-table">
                         <tr>
                             <th><label>Desconto Global</label></th>
                             <td>
@@ -438,7 +483,7 @@ trait GPP_Admin {
                                 <p class="description">Este desconto será aplicado em todos os tipos de planos desta cidade (a menos que você configure descontos específicos abaixo)</p>
                             </td>
                         </tr>
-                        
+
                         <tr class="gpp-row-completo">
                             <th><label>Descontos Diferenciados</label></th>
                             <td>
@@ -447,7 +492,7 @@ trait GPP_Admin {
                                     <strong>Algum plano tem desconto diferente?</strong>
                                 </label>
                                 <p class="description">Se marcado, você poderá configurar descontos específicos para cada tipo de plano</p>
-                                
+
                                 <div id="gpp-descontos-diferenciados-container" style="display: none; margin-top: 15px; padding: 15px; background: #fff7e8; border: 1px solid #f0dcb4; border-radius: 10px;">
                                     <p><strong>Configure os descontos específicos por tipo:</strong></p>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
@@ -472,46 +517,13 @@ trait GPP_Admin {
                                 </div>
                             </td>
                         </tr>
-                        
-                        <tr class="gpp-row-completo">
-                            <th><label>Tipos de Planos</label></th>
-                            <td>
-                                <p><strong>Selecione quais tipos de planos esta cidade terá:</strong></p>
-                                <label class="gpp-check-pilula" style="--gpp-accent:#0066FF;">
-                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="empresarial" id="gpp-tipo-empresarial">
-                                    📈 Empresarial
-                                </label>
-                                <label class="gpp-check-pilula" style="--gpp-accent:#00A344;">
-                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="individual" id="gpp-tipo-individual">
-                                    👤 Individual
-                                </label>
-                                <label class="gpp-check-pilula" style="--gpp-accent:#FF6600;">
-                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="pme" id="gpp-tipo-pme">
-                                    🏢 PME
-                                </label>
-                                <label class="gpp-check-pilula" style="--gpp-accent:#8E44AD;">
-                                    <input type="checkbox" class="gpp-tipo-plano-check" data-tipo="adesao" id="gpp-tipo-adesao">
-                                    🤝 Adesao
-                                </label>
-                            </td>
-                        </tr>
                     </table>
-
-                    <!-- ===== ABAS DOS TIPOS DE PLANO (modo completo) =====
-                         Cada tipo marcado acima vira uma aba; edita-se UM tipo
-                         de cada vez, em vez de todos empilhados na mesma tela. -->
-                    <div id="gpp-tipos-tabs" class="gpp-tipos-tabs" style="display:none;">
-                        <span class="gpp-tipos-tabs-rotulo">Editando plano:</span>
-                        <button type="button" class="gpp-tab-tipo" data-tipo="empresarial" style="display:none; --gpp-accent:#0066FF;">📈 Empresarial</button>
-                        <button type="button" class="gpp-tab-tipo" data-tipo="individual" style="display:none; --gpp-accent:#00A344;">👤 Individual</button>
-                        <button type="button" class="gpp-tab-tipo" data-tipo="pme" style="display:none; --gpp-accent:#FF6600;">🏢 PME</button>
-                        <button type="button" class="gpp-tab-tipo" data-tipo="adesao" style="display:none; --gpp-accent:#8E44AD;">🤝 Adesão</button>
                     </div>
 
                     <!-- ===== MODO SIMPLES: tabela única (Faixa Etária → Valor) ===== -->
-                    <div id="gpp-secao-simples" style="display:none;">
+                    <div id="gpp-secao-simples" class="gpp-painel-modal" data-painel="simples" style="display:none;">
                         <h3>🧾 Tabela de Preços — <span id="gpp-simples-op-nome"></span></h3>
-                        <p>Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores — a pré-visualização se monta sozinha:</p>
+                        <p>Esta operadora usa <strong>uma única tabela por cidade</strong>. Cole o JSON com as faixas etárias e valores:</p>
                         <div class="gpp-editor-json">
                             <div class="gpp-editor-toolbar">
                                 <label style="font-weight:bold;">JSON da tabela</label>
@@ -529,7 +541,6 @@ trait GPP_Admin {
   {"faixa_etaria": "19 a 23 anos", "valor": "229,90"}
 ]'></textarea>
                             <div class="gpp-status-json" id="gpp-status-tabela-simples"></div>
-                            <div class="gpp-json-preview" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -598,7 +609,6 @@ trait GPP_Admin {
                                                 </div>
                                                 <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total-json" rows="6"></textarea>
                                                 <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-total"></div>
-                                                <div class="gpp-json-preview" aria-live="polite"></div>
                                             </div>
                                         </div>
 
@@ -617,7 +627,6 @@ trait GPP_Admin {
                                                 </div>
                                                 <textarea class="gpp-json-field large-text code" id="gpp-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial-json" rows="6"></textarea>
                                                 <div class="gpp-status-json" id="gpp-status-<?php echo $tipo_key; ?>-<?php echo $acom_key; ?>-parcial"></div>
-                                                <div class="gpp-json-preview" aria-live="polite"></div>
                                             </div>
                                         </div>
                                     </div>
@@ -655,27 +664,7 @@ trait GPP_Admin {
             var GPP_URL_VARIAVEIS = '<?php echo admin_url('admin.php?page=gpp-variaveis&operadora='); ?>';
             var GPP_URL_ADMIN = '<?php echo admin_url('admin.php?page=gerenciador-precos-planos&operadora='); ?>';
 
-            // Ajusta os campos do modal conforme o modo da operadora (simples x completo)
-            function gppAplicarModoModal(simples) {
-                if (simples) {
-                    $('.gpp-row-completo').hide();
-                    $('.gpp-secao-tipo').hide();
-                    $('#gpp-tipos-tabs').hide();
-                    $('#gpp-secao-simples').show();
-                    if (GPP_OPS[GPP_OPERADORA]) {
-                        $('#gpp-simples-op-nome').text(GPP_OPS[GPP_OPERADORA].nome);
-                    }
-                } else {
-                    $('.gpp-row-completo').show();
-                    $('#gpp-secao-simples').hide();
-                    // As seções de tipo são controladas pelas abas (gppAtualizarTabsTipos)
-                    gppAtualizarTabsTipos();
-                }
-            }
-
-            // ===== ABAS DE TIPOS DE PLANO NO MODAL =====
-            // Um tipo de cada vez na tela; a barra de abas reflete os
-            // checkboxes de "Tipos de Planos".
+            // ===== ABAS DO MODAL (Dados / Descontos / Tabela / um por tipo) =====
             var GPP_TIPOS = ['empresarial', 'individual', 'pme', 'adesao'];
 
             function gppTiposMarcados() {
@@ -684,40 +673,61 @@ trait GPP_Admin {
                 });
             }
 
-            function gppAtualizarTabsTipos(tipoPreferido) {
-                if (GPP_SIMPLES) {
-                    $('#gpp-tipos-tabs').hide();
-                    return;
-                }
-                var marcados = gppTiposMarcados();
+            // Ativa uma aba do modal e mostra só o painel correspondente
+            function gppAtivarAbaModal(alvo) {
+                $('#gpp-tipos-tabs .gpp-tab-tipo').removeClass('gpp-tab-tipo-ativa');
+                $('#gpp-tipos-tabs .gpp-tab-tipo[data-alvo="' + alvo + '"]').addClass('gpp-tab-tipo-ativa');
 
-                // cada aba só aparece se o tipo estiver marcado
-                GPP_TIPOS.forEach(function (t) {
-                    $('.gpp-tab-tipo[data-tipo="' + t + '"]').toggle(marcados.indexOf(t) !== -1);
-                });
-
-                if (!marcados.length) {
-                    $('#gpp-tipos-tabs').hide();
-                    $('.gpp-secao-tipo').hide();
-                    return;
-                }
-                $('#gpp-tipos-tabs').show();
-
-                // decide qual aba fica ativa
-                var ativo = (tipoPreferido && marcados.indexOf(tipoPreferido) !== -1)
-                    ? tipoPreferido
-                    : ($('.gpp-tab-tipo.gpp-tab-tipo-ativa').data('tipo') || marcados[0]);
-                if (marcados.indexOf(ativo) === -1) { ativo = marcados[0]; }
-
-                $('.gpp-tab-tipo').removeClass('gpp-tab-tipo-ativa');
-                $('.gpp-tab-tipo[data-tipo="' + ativo + '"]').addClass('gpp-tab-tipo-ativa');
+                $('.gpp-painel-modal').hide();
                 $('.gpp-secao-tipo').hide();
-                $('#gpp-secao-' + ativo).show();
+
+                if (GPP_TIPOS.indexOf(alvo) !== -1) {
+                    $('#gpp-secao-' + alvo).show();
+                } else {
+                    $('.gpp-painel-modal[data-painel="' + alvo + '"]').show();
+                }
             }
 
-            $(document).on('click', '.gpp-tab-tipo', function () {
-                gppAtualizarTabsTipos($(this).data('tipo'));
+            // Sincroniza a visibilidade das abas com o modo/checkboxes.
+            // tipoPreferido: abre direto na aba desse tipo (recém-marcado).
+            function gppAtualizarTabsTipos(tipoPreferido) {
+                var marcados = GPP_SIMPLES ? [] : gppTiposMarcados();
+
+                // abas de tipo: só as marcadas (e nunca no modo simples)
+                GPP_TIPOS.forEach(function (t) {
+                    $('#gpp-tipos-tabs .gpp-tab-tipo[data-tipo="' + t + '"]').toggle(marcados.indexOf(t) !== -1);
+                });
+                // aba da tabela única: só no modo simples
+                $('#gpp-tab-simples').toggle(!!GPP_SIMPLES);
+
+                if (tipoPreferido && marcados.indexOf(tipoPreferido) !== -1) {
+                    gppAtivarAbaModal(tipoPreferido);
+                    return;
+                }
+
+                // se a aba ativa sumiu (tipo desmarcado / troca de modo), volta para Dados
+                var $ativa = $('#gpp-tipos-tabs .gpp-tab-tipo-ativa');
+                if (!$ativa.length || $ativa.css('display') === 'none') {
+                    gppAtivarAbaModal('dados');
+                }
+            }
+
+            $(document).on('click', '#gpp-tipos-tabs .gpp-tab-tipo', function () {
+                gppAtivarAbaModal($(this).data('alvo'));
             });
+
+            // Ajusta os campos do modal conforme o modo da operadora (simples x completo)
+            function gppAplicarModoModal(simples) {
+                if (simples) {
+                    $('.gpp-row-completo').hide();
+                    if (GPP_OPS[GPP_OPERADORA]) {
+                        $('#gpp-simples-op-nome').text(GPP_OPS[GPP_OPERADORA].nome);
+                    }
+                } else {
+                    $('.gpp-row-completo').show();
+                }
+                gppAtualizarTabsTipos();
+            }
 
             // Fecha a gaveta de shortcodes
             function gppFecharGaveta() {
@@ -895,18 +905,16 @@ trait GPP_Admin {
                 }, 1500);
             });
             
-            // Controle dos tipos de planos (agora via abas: um tipo por vez na tela)
+            // Controle dos tipos de planos: marcar cria a aba do tipo na barra
+            // (sem sair da aba Dados — a pílula acesa é o feedback); desmarcar
+            // remove a aba e limpa as acomodações do tipo.
             $('.gpp-tipo-plano-check').on('change', function() {
                 var tipo = $(this).data('tipo');
 
-                if ($(this).is(':checked')) {
-                    // abre direto na aba do tipo recém-marcado
-                    gppAtualizarTabsTipos(tipo);
-                } else {
-                    // Desmarca todas as acomodações do tipo desativado
+                if (!$(this).is(':checked')) {
                     $('#gpp-secao-' + tipo).find('.gpp-acomodacao-check').prop('checked', false).trigger('change');
-                    gppAtualizarTabsTipos();
                 }
+                gppAtualizarTabsTipos();
             });
             
             // Controle das acomodações
@@ -970,35 +978,22 @@ trait GPP_Admin {
                 return { dados: dados };
             }
 
-            // Atualiza status + pré-visualização de um textarea de JSON
+            // Atualiza o status de validação de um textarea de JSON
             function gppAtualizarEditor($campo) {
                 var id = $campo.attr('id');
                 var statusDiv = $('#' + id.replace('-json', '').replace(/^gpp-/, 'gpp-status-'));
-                var $preview = $campo.closest('.gpp-editor-json').find('.gpp-json-preview');
                 var r = gppValidarJson($campo.val());
 
                 if (r.vazio) {
                     statusDiv.html('');
-                    $preview.empty();
                     return;
                 }
                 if (r.erro) {
                     statusDiv.html('<span class="gpp-status-error">✗ Erro: ' + r.erro + '</span>');
-                    $preview.empty();
                     return;
                 }
 
                 statusDiv.html('<span class="gpp-status-success">✓ JSON válido (' + r.dados.length + ' faixas)</span>');
-
-                var html = '<p class="gpp-preview-titulo">Pré-visualização — ' + r.dados.length + ' faixas</p>';
-                html += '<table><thead><tr><th>Faixa etária</th><th>Valor</th></tr></thead><tbody>';
-                r.dados.forEach(function (item) {
-                    var faixa = $('<span>').text(item.faixa_etaria).html();
-                    var valor = $('<span>').text(gppValorDoItem(item)).html();
-                    html += '<tr><td>' + faixa + '</td><td>' + valor + '</td></tr>';
-                });
-                html += '</tbody></table>';
-                $preview.html(html);
             }
 
             function gppAtualizarTodosEditores() {
@@ -1119,10 +1114,10 @@ trait GPP_Admin {
                 $('.gpp-desconto-diferenciado').val('');
                 $('#gpp-tabela-simples-json').val('');
                 $('.gpp-status-json').empty();
-                $('.gpp-json-preview').empty();
                 $('.gpp-reajuste-desfazer').hide();
                 $('.gpp-reajuste-pct').val('');
                 gppAplicarModoModal(GPP_SIMPLES);
+                gppAtivarAbaModal('dados');
                 modal.show();
             });
 
@@ -1190,6 +1185,7 @@ trait GPP_Admin {
                                 }
                                 $('.gpp-reajuste-desfazer').hide();
                                 gppAtualizarTodosEditores();
+                                gppAtivarAbaModal('dados');
                                 modal.show();
                                 return;
                             }
@@ -1228,8 +1224,9 @@ trait GPP_Admin {
                             
                             $('.gpp-reajuste-desfazer').hide();
                             gppAtualizarTodosEditores();
-                            // Ativa a aba do primeiro tipo marcado (edição separada por tipo)
+                            // Sincroniza as abas de tipo e abre na aba Dados
                             gppAtualizarTabsTipos();
+                            gppAtivarAbaModal('dados');
                             modal.show();
                         }
                     }
@@ -2624,12 +2621,6 @@ public function pagina_variaveis() {
                 margin: 8px 0 4px;
                 border-bottom: 1px solid #e2e8f0;
             }
-            .gpp-tipos-tabs-rotulo {
-                font-size: 12px;
-                font-weight: 600;
-                color: #64748b;
-                margin-right: 4px;
-            }
             .gpp-tab-tipo {
                 border: 1px solid #cbd5e1;
                 background: #f8fafc;
@@ -2684,52 +2675,6 @@ public function pagina_variaveis() {
                 text-align: right;
                 font-size: 12px;
             }
-            .gpp-json-preview { margin-top: 8px; }
-            .gpp-json-preview .gpp-preview-titulo {
-                font-size: 11px;
-                font-weight: 600;
-                letter-spacing: 0.04em;
-                text-transform: uppercase;
-                color: #64748b;
-                margin: 0 0 4px;
-            }
-            .gpp-json-preview table {
-                width: 100%;
-                border-collapse: collapse;
-                background: #fff;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                overflow: hidden;
-            }
-            .gpp-json-preview th {
-                text-align: left;
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.05em;
-                text-transform: uppercase;
-                color: #64748b;
-                background: #f8fafc;
-                padding: 6px 12px;
-                border-bottom: 1px solid #e2e8f0;
-            }
-            .gpp-json-preview td {
-                padding: 5px 12px;
-                font-size: 12.5px;
-                color: #1e293b;
-                border-bottom: 1px solid #f1f5f9;
-            }
-            .gpp-json-preview th:last-child,
-            .gpp-json-preview td:last-child {
-                text-align: right;
-                font-variant-numeric: tabular-nums;
-            }
-            .gpp-json-preview td:last-child {
-                font-family: Consolas, Monaco, 'Courier New', monospace;
-                font-weight: 600;
-                color: #0a4b78;
-            }
-            .gpp-json-preview tbody tr:nth-child(even) td { background: #f8fafc; }
-            .gpp-json-preview tbody tr:last-child td { border-bottom: none; }
         </style>
         <?php
     }
